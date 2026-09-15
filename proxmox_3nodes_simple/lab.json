@@ -1,0 +1,30 @@
+{
+  "id": "proxmox_3nodes_simple",
+  "subnet": 56,
+  "box": "bento/debian-13",
+  "box_version": "202510.26.0",
+  "internal_networks": [],
+  "nodes": [
+    {
+      "name": "pve1",
+      "role": "pve",
+      "host": 11,
+      "cpus": 6,
+      "memory": 12288
+    },
+    {
+      "name": "pve2",
+      "role": "pve",
+      "host": 12,
+      "cpus": 6,
+      "memory": 12288
+    },
+    {
+      "name": "pve3",
+      "role": "pve",
+      "host": 13,
+      "cpus": 6,
+      "memory": 12288
+    }
+  ]
+}

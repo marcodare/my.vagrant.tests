@@ -1,0 +1,40 @@
+{
+  "id": "cloudstack_1manager_3nodes",
+  "subnet": 60,
+  "box": "bento/ubuntu-22.04",
+  "box_version": "202510.26.0",
+  "internal_networks": [],
+  "nodes": [
+    {
+      "name": "manager",
+      "role": "manager",
+      "host": 10,
+      "cpus": 4,
+      "memory": 8192
+    },
+    {
+      "name": "kvm1",
+      "role": "kvm",
+      "host": 21,
+      "cpus": 6,
+      "memory": 16384,
+      "disk_gb": 120
+    },
+    {
+      "name": "kvm2",
+      "role": "kvm",
+      "host": 22,
+      "cpus": 6,
+      "memory": 16384,
+      "disk_gb": 120
+    },
+    {
+      "name": "kvm3",
+      "role": "kvm",
+      "host": 23,
+      "cpus": 6,
+      "memory": 16384,
+      "disk_gb": 120
+    }
+  ]
+}

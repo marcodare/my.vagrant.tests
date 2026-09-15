@@ -1,0 +1,24 @@
+[project]
+name = "infrastructure-playground-tools"
+version = "0.1.0"
+description = "Validazione statica dei laboratori Vagrant autonomi"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "bandit>=1.8", "shellcheck-py>=0.10"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

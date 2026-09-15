@@ -1,0 +1,48 @@
+# Stato locale di Vagrant: identificativi delle VM, chiavi e metadati del provider.
+# Si ricrea avviando il laboratorio e non deve essere condiviso tramite Git.
+.vagrant/
+
+# Contenuti locali dei laboratori: dischi/import, dati e log.
+# ** applica la regola a qualsiasi profondità; * esclude i contenuti della cartella.
+# Il prefisso ! reinclude i file indicati, mantenendo le istruzioni nel repository.
+**/disks/*
+!**/disks/README.md
+**/data/*
+!**/data/README.md
+**/logs/*
+# Git non conserva cartelle vuote: .gitkeep è un segnaposto convenzionale.
+!**/logs/.gitkeep
+
+# Immagini disco, ISO e box Vagrant: file voluminosi da scaricare o ricreare.
+# Queste regole valgono anche se i file si trovano fuori da disks/ o data/.
+*.vdi
+*.vmdk
+*.qcow2
+*.iso
+*.box
+
+# Log generati durante esecuzione e provisioning, potenzialmente sensibili.
+*.log
+
+# Variabili d'ambiente locali, che possono contenere credenziali.
+# Si può versionare solo il modello .env.example, privo di segreti reali.
+.env
+.env.*
+!.env.example
+
+# Configurazioni personali con .local. nel nome, ad esempio config.local.json.
+*.local.*
+
+# Metadati creati dal Finder di macOS.
+.DS_Store
+
+# Ambiente virtuale Python creato da uv e cache ricreabili degli strumenti.
+# .python-version, pyproject.toml e uv.lock restano invece versionabili.
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Impostazioni personali di Claude Code; le istruzioni condivise restano nel Git.
+.claude/settings.local.json
