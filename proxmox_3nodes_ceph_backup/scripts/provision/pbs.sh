@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+series=${1:?Specificare la versione software da lab.json}
+[[ $series == 4.2 ]] || { echo 'Versione non prevista da questo provisioner'; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 [[ $(cat /var/lib/infra-lab/role) == pbs ]] || exit 1
 curl -fsSL https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg -o /usr/share/keyrings/proxmox-archive-keyring.gpg
@@ -7,8 +9,17 @@ echo 'deb [signed-by=/usr/share/keyrings/proxmox-archive-keyring.gpg] http://dow
 for file in /etc/apt/sources.list.d/pbs-enterprise.list /etc/apt/sources.list.d/pbs-enterprise.sources; do
   if [[ -f $file ]]; then mv "$file" "$file.disabled"; fi
 done
+cat > /etc/apt/preferences.d/infra-pbs <<EOF
+Package: proxmox-backup-server
+Pin: version $series.*
+Pin-Priority: 1000
+
+Package: proxmox-backup-server
+Pin: version *
+Pin-Priority: -1
+EOF
 apt-get update
-apt-get install -y proxmox-backup-server
+apt-get install -y "proxmox-backup-server=${series}.*"
 for file in /etc/apt/sources.list.d/pbs-enterprise.list /etc/apt/sources.list.d/pbs-enterprise.sources; do
   if [[ -f $file ]]; then mv "$file" "$file.disabled"; fi
 done

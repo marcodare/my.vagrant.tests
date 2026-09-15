@@ -1,0 +1,143 @@
+# frozen_string_literal: true
+# Questo Vagrantfile è autonomo e modificabile per il singolo laboratorio.
+# Tre manager HA e tre KVM/storage ceph: fake public + private/guest VLAN.
+
+# 1. DATI DEL LABORATORIO
+# JSON è la libreria standard Ruby che legge la topologia da lab.json.
+# __dir__ indica la cartella di questo file: il lab resta autonomo.
+# Modificare lab.json per nodi/risorse; questo file per il comportamento.
+# fetch('chiave') richiede che il campo esista e segnala se manca.
+require 'json'
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+
+# 2. IMPOSTAZIONI COMUNI A TUTTE LE VM
+# '2' è la versione del formato di configurazione, non di VirtualBox.
+# do |config| ... end è un blocco Ruby: config raccoglie le opzioni comuni.
+Vagrant.configure('2') do |config|
+
+  # La box è l’immagine base del sistema operativo; versione e architettura
+  # selezionano la variante da scaricare. amd64 è adatta al Bosgame Ryzen.
+  config.vm.box = spec.fetch('box')
+  config.vm.box_version = spec.fetch('box_version')
+  config.vm.box_architecture = 'amd64'
+
+  # Disabilita il mount automatico della cartella host dentro /vagrant.
+  # I provisioner vengono comunque trasferiti da Vagrant tramite SSH.
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+
+  # Attende fino a 900 secondi (15 minuti) la disponibilità SSH della VM.
+  # Questo non è il limite di durata degli script di provisioning.
+  config.vm.boot_timeout = 900
+
+  # 3. UNA DEFINIZIONE VM PER OGNI ELEMENTO DI nodes
+  # node contiene i dati del nodo; index parte da 0 (primo nodo).
+  spec.fetch('nodes').each_with_index do |node, index|
+
+    # L’IP combina il terzo ottetto del lab con il suffisso del nodo:
+    # per esempio subnet=56 e host=11 producono 192.168.56.11.
+    subnet = spec.fetch('subnet')
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+
+    # MAC deterministico per la seconda scheda: prefisso 080027, subnet,
+    # indice nodo e numero NIC. %02X scrive due cifre esadecimali.
+    # Riordinare nodes cambia i MAC: mantenere stabile l’ordine delle VM.
+    mac = format('080027%02X%02X02', subnet, index + 1)
+
+    # Prepara gli argomenti delle reti aggiuntive per base.sh.
+    # Ogni voce diventa MAC,IP,bridge; le voci sono separate da punto e virgola.
+    # n parte da 0: la prima rete extra usa la NIC 3; base.sh la collega a cloudbr0.
+    # scan/join convertono il MAC nel formato con due punti usato da Linux.
+    # Con internal_networks vuoto, extras è una stringa vuota.
+    extras = spec.fetch('internal_networks').each_with_index.map do |net, n|
+      nic_mac = format('080027%02X%02X%02X', subnet, index + 1, n + 3).scan(/../).join(':').downcase
+      "#{nic_mac},#{net.fetch('prefix')}.#{node.fetch('host')},vmbr#{n + 1}"
+    end.join(';')
+
+    # 4. CONFIGURAZIONE DEL SINGOLO NODO
+    # define assegna il nome usato da comandi come vagrant ssh pve1.
+    # vm.vm.hostname imposta invece il nome del sistema operativo guest.
+    config.vm.define node.fetch('name') do |vm|
+      vm.vm.hostname = node.fetch('name')
+
+      # NIC 1: NAT tecnica gestita da Vagrant per SSH e download.
+      # NIC 2: fake public host-only su cloudbr1; NIC 3 privata su cloudbr0.
+      # auto_config: false lascia IP e bridge nel guest a scripts/provision/base.sh;
+      # qui l’IP serve anche a Vagrant per selezionare la rete host-only.
+      vm.vm.network 'private_network', ip: address, auto_config: false
+
+      # NIC 3 e successive: reti interne VirtualBox, senza collegamento diretto
+      # all’host o alla LAN. Lo stesso nome intnet collega i nodi del lab.
+      # Il prefisso id evita di unire accidentalmente reti di laboratori diversi.
+      spec.fetch('internal_networks').each do |net|
+        vm.vm.network 'private_network', ip: "#{net.fetch('prefix')}.#{node.fetch('host')}",
+          auto_config: false, virtualbox__intnet: "#{spec.fetch('id')}-#{net.fetch('name')}"
+      end
+
+      # 5. HARDWARE VIRTUALE: OPZIONI SPECIFICHE DI VIRTUALBOX
+      # vb.name è il nome nella GUI VirtualBox; include il lab per distinguerlo.
+      # memory è espressa in MiB; cpus è il numero di CPU virtuali assegnate.
+      # gui=false avvia senza finestra della console (accesso via SSH o UI web).
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        vb.gui = false
+
+        # customize passa opzioni a VBoxManage modifyvm prima dell’avvio.
+        # :id viene sostituito da Vagrant con l’identificatore reale della VM.
+        vb.customize ['modifyvm', :id, '--macaddress2', mac]
+
+        # Espone la virtualizzazione hardware ai soli nodi PVE/KVM: potranno
+        # eseguire altre VM al loro interno. PBS e manager non ne hanno bisogno.
+        # %w[pve kvm] è una lista Ruby; condizione ? 'on' : 'off' sceglie il valore.
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', %w[pve kvm].include?(node.fetch('role')) ? 'on' : 'off']
+
+        # La modalità promiscua permette alla NIC di ricevere anche frame per
+        # i MAC delle VM annidate collegate al bridge del nodo.
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+
+        # Applica MAC e modalità promiscua anche alle NIC interne aggiuntive.
+        # _net indica un parametro del blocco che qui non viene utilizzato.
+        spec.fetch('internal_networks').each_with_index do |_net, n|
+          vb.customize ['modifyvm', :id, "--macaddress#{n + 3}", format('080027%02X%02X%02X', subnet, index + 1, n + 3)]
+          vb.customize ['modifyvm', :id, "--nicpromisc#{n + 3}", 'allow-all']
+        end
+      end
+
+      # 6. DISCHI GESTITI DA VAGRANT/VIRTUALBOX
+      # Richiede 80 GB per il disco principale della box. L’eventuale crescita
+      # di partizione e filesystem nel guest va verificata separatamente.
+      vm.vm.disk :disk, size: '80GB', primary: true
+
+      # disk_gb è opzionale: se presente aggiunge un secondo disco vuoto.
+      # Il suo uso dipende dal ruolo: OSD Ceph, datastore PBS o storage KVM.
+      # Questa dichiarazione non formatta il disco e non crea pool/datastore.
+      # halt conserva i dischi; destroy elimina quelli gestiti insieme alla VM.
+      if node['disk_gb']
+        vm.vm.disk :disk, size: "#{node.fetch('disk_gb')}GB", name: "#{node.fetch('name')}-data"
+      end
+
+      # 7. PROVISIONING: CONFIGURAZIONE DENTRO IL GUEST
+      # Vagrant esegue gli script nell’ordine dichiarato, di default con sudo.
+      # base.sh riceve: ruolo, hostname, IP management, MAC NIC 2, reti extra, subnet.
+      # Prepara hostname, pacchetti comuni e reti; lo script successivo installa
+      # il ruolo indicato in lab.json (pve, pbs, manager oppure kvm).
+      # I percorsi sono locali a questo laboratorio, senza import condivisi.
+      vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
+        args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s]
+
+      # Il provisioning parte al primo up, oppure con vagrant provision/--provision.
+      # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per
+      # avviare il kernel PVE prima di completare l’installazione dello stack.
+      # Cluster, pool e altre operazioni didattiche sono spiegati nel README.
+      # Versione software richiesta dal lab.json, distinta dalla versione della box.
+      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",
+        args: [spec.fetch('versions').fetch(node.fetch('role'))]
+      # Installa il backend sui KVM; cluster e dischi si configurano dal runbook.
+      if node.fetch('role') == 'kvm'
+        vm.vm.provision 'shell', path: 'scripts/provision/storage.sh'
+      end
+    end
+  end
+end

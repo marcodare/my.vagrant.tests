@@ -8,7 +8,32 @@ import re
 from pathlib import Path
 from typing import Any
 
-ROLES = frozenset({"pve", "pbs", "manager", "kvm"})
+ROLE_BOXES = {
+    "pve": "bento/debian-13",
+    "pbs": "bento/debian-13",
+    "manager": "bento/ubuntu-22.04",
+    "ha-manager": "bento/ubuntu-22.04",
+    "kvm": "bento/ubuntu-22.04",
+    "os-controller": "bento/ubuntu-24.04",
+    "os-compute": "bento/ubuntu-24.04",
+    "zsvirt": "local/zsvirt-h84r",
+    "k3s-control": "bento/ubuntu-24.04",
+    "k3s-worker": "bento/ubuntu-24.04",
+    "k8s-lb": "bento/ubuntu-24.04",
+    "k8s-control": "bento/ubuntu-24.04",
+    "k8s-worker": "bento/ubuntu-24.04",
+}
+PRODUCT_VERSIONS = {
+    "pve": "9.2",
+    "pbs": "4.2",
+    "manager": "4.23",
+    "ha-manager": "4.23",
+    "kvm": "4.23",
+    "k3s-control": "v1.36.4+k3s1",
+    "k3s-worker": "v1.36.4+k3s1",
+    "k8s-control": "1.37",
+    "k8s-worker": "1.37",
+}
 
 
 def integer(value: object, minimum: int, maximum: int, label: str) -> int:
@@ -22,12 +47,17 @@ def load_spec(directory: Path) -> dict[str, Any]:
     spec = json.loads((directory / "lab.json").read_text(encoding="utf-8"))
     if not isinstance(spec, dict):
         raise ValueError("lab.json deve contenere un oggetto")
-    if spec.get("id") != directory.name or not re.fullmatch(r"[a-z0-9_]+", spec["id"]):
+    if spec.get("id") != directory.name or not re.fullmatch(
+        r"[A-Za-z0-9_]+", spec["id"]
+    ):
         raise ValueError("ID non valido o diverso dalla cartella")
-    integer(spec.get("subnet"), 56, 60, "subnet")
-    if spec.get("box") not in {"bento/debian-13", "bento/ubuntu-22.04"}:
+    integer(spec.get("subnet"), 56, 65, "subnet")
+    integer(spec.get("mac_id", spec["subnet"]), 1, 255, "mac_id")
+    if spec.get("netmask", "255.255.255.0") not in {"255.255.255.0", "255.255.255.128"}:
+        raise ValueError("Netmask prevista /24 o /25")
+    if spec.get("box") not in set(ROLE_BOXES.values()):
         raise ValueError("Box non prevista")
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", spec.get("box_version", "")):
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", spec.get("box_version", "")):
         raise ValueError("Versione box non valida")
     nodes = spec.get("nodes")
     if not isinstance(nodes, list) or not 1 <= len(nodes) <= 8:
@@ -49,15 +79,42 @@ def load_spec(directory: Path) -> dict[str, Any]:
         integer(node.get("cpus"), 1, 16, "cpus")
         if "disk_gb" in node:
             integer(node["disk_gb"], 10, 1000, "disk_gb")
-        if node.get("role") not in ROLES:
+        if node.get("role") not in ROLE_BOXES:
             raise ValueError("Ruolo non valido")
-        expected = (
-            "bento/debian-13"
-            if node["role"] in {"pve", "pbs"}
-            else "bento/ubuntu-22.04"
-        )
+        expected = ROLE_BOXES[node["role"]]
         if spec["box"] != expected:
             raise ValueError("Box incompatibile con il ruolo")
+        if node["role"] in PRODUCT_VERSIONS:
+            versions = spec.get("versions", {})
+            if (
+                not isinstance(versions, dict)
+                or versions.get(node["role"]) != PRODUCT_VERSIONS[node["role"]]
+            ):
+                raise ValueError(
+                    "Versione software diversa dal ramo previsto dal progetto"
+                )
+        if "attach_internal" in node and type(node["attach_internal"]) is not bool:
+            raise ValueError("attach_internal deve essere booleano")
+    netmask = spec.get("netmask", "255.255.255.0")
+    segments = {
+        ipaddress.IPv4Interface(
+            f"192.168.{spec['subnet']}.{node['host']}/{netmask}"
+        ).network
+        for node in nodes
+    }
+    if len(segments) != 1:
+        raise ValueError(
+            "Tutti i nodi devono appartenere allo stesso segmento host-only"
+        )
+    segment = next(iter(segments))
+    for node in nodes:
+        address = ipaddress.IPv4Address(f"192.168.{spec['subnet']}.{node['host']}")
+        if address in {
+            segment.network_address,
+            segment.broadcast_address,
+            segment.network_address + 1,
+        }:
+            raise ValueError("IP riservato a rete, broadcast o adattatore host-only")
     if sum(node["memory"] for node in nodes) > 96 * 1024:
         raise ValueError("Superato budget 96 GiB per lab")
     networks = spec.get("internal_networks", [])
@@ -73,9 +130,9 @@ def load_spec(directory: Path) -> dict[str, Any]:
             raise ValueError("Nome rete non valido o duplicato")
         network_names.add(name)
         prefix = network.get("prefix", "")
-        address = ipaddress.IPv4Network(f"{prefix}.0/24")
+        internal_segment = ipaddress.IPv4Network(f"{prefix}.0/24")
         if (
-            not address.subnet_of(ipaddress.IPv4Network("10.0.0.0/8"))
+            not internal_segment.subnet_of(ipaddress.IPv4Network("10.0.0.0/8"))
             or prefix in prefixes
         ):
             raise ValueError("Rete interna duplicata o fuori 10.0.0.0/8")

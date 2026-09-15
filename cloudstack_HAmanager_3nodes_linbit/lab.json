@@ -1,0 +1,65 @@
+{
+  "id": "cloudstack_HAmanager_3nodes_linbit",
+  "subnet": 61,
+  "topology": "cloudstack-ha",
+  "storage_backend": "linstor",
+  "box": "bento/ubuntu-22.04",
+  "box_version": "202510.26.0",
+  "internal_networks": [
+    {
+      "name": "private",
+      "prefix": "10.61.0"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "mgmt1",
+      "role": "ha-manager",
+      "host": 11,
+      "cpus": 4,
+      "memory": 8192
+    },
+    {
+      "name": "mgmt2",
+      "role": "ha-manager",
+      "host": 12,
+      "cpus": 4,
+      "memory": 8192
+    },
+    {
+      "name": "mgmt3",
+      "role": "ha-manager",
+      "host": 13,
+      "cpus": 4,
+      "memory": 8192
+    },
+    {
+      "name": "kvm1",
+      "role": "kvm",
+      "host": 21,
+      "cpus": 6,
+      "memory": 20480,
+      "disk_gb": 200
+    },
+    {
+      "name": "kvm2",
+      "role": "kvm",
+      "host": 22,
+      "cpus": 6,
+      "memory": 20480,
+      "disk_gb": 200
+    },
+    {
+      "name": "kvm3",
+      "role": "kvm",
+      "host": 23,
+      "cpus": 6,
+      "memory": 20480,
+      "disk_gb": 200
+    }
+  ],
+  "versions": {
+    "ha-manager": "4.23",
+    "kvm": "4.23"
+  }
+}

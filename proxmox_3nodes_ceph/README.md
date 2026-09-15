@@ -1,5 +1,22 @@
 # proxmox_3nodes_ceph
 
+Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Il `Vagrantfile` mantiene il percorso assistito già disponibile.
+
+## Due percorsi di avvio
+
+```bash
+./scripts/up.sh                                      # assistito
+VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh pve1
+```
+
+Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
+`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+
+Versioni richieste: **Proxmox VE 9.2**.
+Patch consentite nel ramo indicato; selezione in `lab.json` e pin APT nel guest.
+
 Laboratorio autonomo Vagrant/VirtualBox. **Solo questo lab acceso**; spegnere
 le altre infrastrutture prima di iniziare. Modificare liberamente `Vagrantfile`,
 `lab.json` e gli script locali: non esistono import da altre cartelle.
@@ -62,3 +79,9 @@ MON/MGR, selezione dei dischi, pool RBD e prova di guasto.
 
 Un disco raw da 100 GB per nodo è lasciato intatto dal provisioning. Non
 assumere che si chiami /dev/sdb: identificarlo per dimensione e layout.
+
+### Separazione dei traffici
+
+Due reti del laboratorio: vmbr1 per Ceph (client/public e replica); vmbr0
+per management, Corosync, migrazione, guest e backup. La NIC NAT tecnica
+serve solo Vagrant/download. Non selezionare vmbr1 come rete di migrazione.

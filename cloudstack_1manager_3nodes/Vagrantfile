@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 # Questo Vagrantfile è autonomo e modificabile per il singolo laboratorio.
-# Un manager CloudStack con NFS e tre host KVM con storage locale.
+# Un manager con NFS e tre KVM: NIC 2 fake public, NIC 3 private/guest VLAN.
 
 # 1. DATI DEL LABORATORIO
 # JSON è la libreria standard Ruby che legge la topologia da lab.json.
@@ -46,7 +46,7 @@ Vagrant.configure('2') do |config|
 
     # Prepara gli argomenti delle reti aggiuntive per base.sh.
     # Ogni voce diventa MAC,IP,bridge; le voci sono separate da punto e virgola.
-    # n parte da 0: la prima rete extra usa la NIC 3 e il bridge vmbr1.
+    # n parte da 0: la prima rete extra usa la NIC 3; base.sh la collega a cloudbr0.
     # scan/join convertono il MAC nel formato con due punti usato da Linux.
     # Con internal_networks vuoto, extras è una stringa vuota.
     extras = spec.fetch('internal_networks').each_with_index.map do |net, n|
@@ -61,7 +61,7 @@ Vagrant.configure('2') do |config|
       vm.vm.hostname = node.fetch('name')
 
       # NIC 1: NAT tecnica gestita da Vagrant per SSH e download.
-      # NIC 2: rete host-only, raggiungibile dall’host e dalle VM del segmento.
+      # NIC 2: fake public host-only su cloudbr1; NIC 3 privata su cloudbr0.
       # auto_config: false lascia IP e bridge nel guest a scripts/provision/base.sh;
       # qui l’IP serve anche a Vagrant per selezionare la rete host-only.
       vm.vm.network 'private_network', ip: address, auto_config: false
@@ -131,7 +131,9 @@ Vagrant.configure('2') do |config|
       # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per
       # avviare il kernel PVE prima di completare l’installazione dello stack.
       # Cluster, pool e altre operazioni didattiche sono spiegati nel README.
-      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
+      # Versione software richiesta dal lab.json, distinta dalla versione della box.
+      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",
+        args: [spec.fetch('versions').fetch(node.fetch('role'))]
     end
   end
 end

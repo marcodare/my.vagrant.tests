@@ -37,6 +37,8 @@ Vagrant.configure('2') do |config|
     # L’IP combina il terzo ottetto del lab con il suffisso del nodo:
     # per esempio subnet=56 e host=11 producono 192.168.56.11.
     subnet = spec.fetch('subnet')
+    # La rete storage è riservata a Ceph: PBS usa solo management/backup.
+    networks = node.fetch('attach_internal', true) ? spec.fetch('internal_networks') : []
     address = "192.168.#{subnet}.#{node.fetch('host')}"
 
     # MAC deterministico per la seconda scheda: prefisso 080027, subnet,
@@ -49,7 +51,7 @@ Vagrant.configure('2') do |config|
     # n parte da 0: la prima rete extra usa la NIC 3 e il bridge vmbr1.
     # scan/join convertono il MAC nel formato con due punti usato da Linux.
     # Con internal_networks vuoto, extras è una stringa vuota.
-    extras = spec.fetch('internal_networks').each_with_index.map do |net, n|
+    extras = networks.each_with_index.map do |net, n|
       nic_mac = format('080027%02X%02X%02X', subnet, index + 1, n + 3).scan(/../).join(':').downcase
       "#{nic_mac},#{net.fetch('prefix')}.#{node.fetch('host')},vmbr#{n + 1}"
     end.join(';')
@@ -69,7 +71,7 @@ Vagrant.configure('2') do |config|
       # NIC 3 e successive: reti interne VirtualBox, senza collegamento diretto
       # all’host o alla LAN. Lo stesso nome intnet collega i nodi del lab.
       # Il prefisso id evita di unire accidentalmente reti di laboratori diversi.
-      spec.fetch('internal_networks').each do |net|
+      networks.each do |net|
         vm.vm.network 'private_network', ip: "#{net.fetch('prefix')}.#{node.fetch('host')}",
           auto_config: false, virtualbox__intnet: "#{spec.fetch('id')}-#{net.fetch('name')}"
       end
@@ -99,7 +101,7 @@ Vagrant.configure('2') do |config|
 
         # Applica MAC e modalità promiscua anche alle NIC interne aggiuntive.
         # _net indica un parametro del blocco che qui non viene utilizzato.
-        spec.fetch('internal_networks').each_with_index do |_net, n|
+        networks.each_with_index do |_net, n|
           vb.customize ['modifyvm', :id, "--macaddress#{n + 3}", format('080027%02X%02X%02X', subnet, index + 1, n + 3)]
           vb.customize ['modifyvm', :id, "--nicpromisc#{n + 3}", 'allow-all']
         end
@@ -131,7 +133,9 @@ Vagrant.configure('2') do |config|
       # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per
       # avviare il kernel PVE prima di completare l’installazione dello stack.
       # Cluster, pool e altre operazioni didattiche sono spiegati nel README.
-      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
+      # Versione software richiesta dal lab.json, distinta dalla versione della box.
+      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",
+        args: [spec.fetch('versions').fetch(node.fetch('role'))]
     end
   end
 end

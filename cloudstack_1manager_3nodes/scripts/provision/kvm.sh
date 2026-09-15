@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
+series=${1:?Specificare la versione software da lab.json}
+[[ $series == 4.23 ]] || { echo 'Versione non prevista da questo provisioner'; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 [[ $(cat /var/lib/infra-lab/role) == kvm ]] || exit 1
 modprobe kvm_amd
 [[ -c /dev/kvm ]] || { echo 'Nested KVM assente.' >&2; exit 1; }
 curl -fsSL https://download.cloudstack.org/release.asc -o /usr/share/keyrings/infra-cloudstack.asc
-echo 'deb [signed-by=/usr/share/keyrings/infra-cloudstack.asc] https://download.cloudstack.org/ubuntu jammy 4.20' > /etc/apt/sources.list.d/infra-cloudstack.list
+echo "deb [signed-by=/usr/share/keyrings/infra-cloudstack.asc] https://download.cloudstack.org/ubuntu jammy $series" > /etc/apt/sources.list.d/infra-cloudstack.list
+cat > /etc/apt/preferences.d/infra-cloudstack <<EOF
+Package: cloudstack-*
+Pin: version $series.*
+Pin-Priority: 1000
+
+Package: cloudstack-*
+Pin: version *
+Pin-Priority: -1
+EOF
 apt-get update
-apt-get install -y cloudstack-agent qemu-kvm libvirt-daemon-system libvirt-clients nfs-common uuid-runtime
+apt-get install -y "cloudstack-agent=${series}.*" qemu-kvm libvirt-daemon-system libvirt-clients nfs-common uuid-runtime
 for key in listen_tls listen_tcp mdns_adv; do
   sed -i -E "/^[[:space:]]*${key}[[:space:]]*=/d" /etc/libvirt/libvirtd.conf
   echo "$key = 0" >> /etc/libvirt/libvirtd.conf
@@ -33,7 +44,7 @@ for key in private.network.device public.network.device guest.network.device loc
 done
 cat >> /etc/cloudstack/agent/agent.properties <<'EOF'
 private.network.device=cloudbr0
-public.network.device=cloudbr0
+public.network.device=cloudbr1
 guest.network.device=cloudbr0
 local.storage.path=/var/lib/libvirt/images
 guest.cpu.mode=host-passthrough

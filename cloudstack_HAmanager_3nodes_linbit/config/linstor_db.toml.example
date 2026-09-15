@@ -1,0 +1,9 @@
+# Solo dopo avere creato linstor_db e var-lib-linstor.mount come da guida LINBIT.
+# Copiare su tutti i candidati in /etc/drbd-reactor.d/linstor_db.toml.
+[[promoter]]
+[promoter.resources.linstor_db]
+start = [
+  "var-lib-linstor.mount",
+  "linstor-controller.service",
+  "ocf:heartbeat:IPaddr2 linstor_vip ip=10.61.0.6 cidr_netmask=24 nic=cloudbr0"
+]

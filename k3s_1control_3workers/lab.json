@@ -1,0 +1,20 @@
+{
+  "id": "k3s_1control_3workers",
+  "subnet": 64,
+  "mac_id": 66,
+  "box": "bento/ubuntu-24.04",
+  "box_version": "202510.26.0",
+  "versions": {
+    "k3s-control": "v1.36.4+k3s1",
+    "k3s-worker": "v1.36.4+k3s1"
+  },
+  "internal_networks": [
+    {"name": "cluster", "prefix": "10.64.0"}
+  ],
+  "nodes": [
+    {"name": "control1", "role": "k3s-control", "host": 10, "cpus": 4, "memory": 8192},
+    {"name": "worker1", "role": "k3s-worker", "host": 21, "cpus": 6, "memory": 8192},
+    {"name": "worker2", "role": "k3s-worker", "host": 22, "cpus": 6, "memory": 8192},
+    {"name": "worker3", "role": "k3s-worker", "host": 23, "cpus": 6, "memory": 8192}
+  ]
+}

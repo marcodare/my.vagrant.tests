@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
+series=${1:?Specificare la versione software da lab.json}
+[[ $series == 4.23 ]] || { echo 'Versione non prevista da questo provisioner'; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 [[ $(cat /var/lib/infra-lab/role) == manager ]] || exit 1
 curl -fsSL https://download.cloudstack.org/release.asc -o /usr/share/keyrings/infra-cloudstack.asc
-echo 'deb [signed-by=/usr/share/keyrings/infra-cloudstack.asc] https://download.cloudstack.org/ubuntu jammy 4.20' > /etc/apt/sources.list.d/infra-cloudstack.list
+echo "deb [signed-by=/usr/share/keyrings/infra-cloudstack.asc] https://download.cloudstack.org/ubuntu jammy $series" > /etc/apt/sources.list.d/infra-cloudstack.list
+cat > /etc/apt/preferences.d/infra-cloudstack <<EOF
+Package: cloudstack-*
+Pin: version $series.*
+Pin-Priority: 1000
+
+Package: cloudstack-*
+Pin: version *
+Pin-Priority: -1
+EOF
 apt-get update
-apt-get install -y cloudstack-management mysql-server nfs-kernel-server iptables-persistent dnsmasq
+apt-get install -y "cloudstack-management=${series}.*" mysql-server nfs-kernel-server iptables-persistent dnsmasq
 cat > /etc/mysql/mysql.conf.d/infra-cloudstack.cnf <<'EOF'
 [mysqld]
 server-id=1
@@ -46,7 +57,7 @@ SQL
 fi
 cloudstack-setup-management
 mkdir -p /srv/secondary
-echo '/srv/secondary 192.168.60.0/24(rw,async,no_root_squash,no_subtree_check)' > /etc/exports.d/infra-cloudstack.exports
+echo '/srv/secondary 10.60.0.0/24(rw,async,no_root_squash,no_subtree_check)' > /etc/exports.d/infra-cloudstack.exports
 exportfs -ra
 systemctl enable --now nfs-kernel-server
 
@@ -57,6 +68,12 @@ nat=$(ip -4 route show default | awk 'NR==1 {print $5}')
 [[ -n $nat && $nat != cloudbr0 ]] || exit 1
 iptables -t nat -C POSTROUTING -s 192.168.60.0/24 -o "$nat" -j MASQUERADE 2>/dev/null ||
   iptables -t nat -A POSTROUTING -s 192.168.60.0/24 -o "$nat" -j MASQUERADE
+iptables -C FORWARD -i cloudbr1 -o "$nat" -j ACCEPT 2>/dev/null ||
+  iptables -A FORWARD -i cloudbr1 -o "$nat" -j ACCEPT
+iptables -C FORWARD -i "$nat" -o cloudbr1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null ||
+  iptables -A FORWARD -i "$nat" -o cloudbr1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -t nat -C POSTROUTING -s 10.60.0.0/24 -o "$nat" -j MASQUERADE 2>/dev/null ||
+  iptables -t nat -A POSTROUTING -s 10.60.0.0/24 -o "$nat" -j MASQUERADE
 iptables -C FORWARD -i cloudbr0 -o "$nat" -j ACCEPT 2>/dev/null ||
   iptables -A FORWARD -i cloudbr0 -o "$nat" -j ACCEPT
 iptables -C FORWARD -i "$nat" -o cloudbr0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null ||
@@ -64,8 +81,9 @@ iptables -C FORWARD -i "$nat" -o cloudbr0 -m conntrack --ctstate ESTABLISHED,REL
 netfilter-persistent save
 cat > /etc/dnsmasq.d/infra-lab.conf <<'EOF'
 interface=cloudbr0
+interface=cloudbr1
 bind-dynamic
-listen-address=192.168.60.10
+listen-address=192.168.60.10,10.60.0.10
 no-resolv
 server=1.1.1.1
 server=8.8.8.8

@@ -3,7 +3,12 @@
   "subnet": 60,
   "box": "bento/ubuntu-22.04",
   "box_version": "202510.26.0",
-  "internal_networks": [],
+  "internal_networks": [
+    {
+      "name": "private",
+      "prefix": "10.60.0"
+    }
+  ],
   "nodes": [
     {
       "name": "manager",
@@ -36,5 +41,10 @@
       "memory": 16384,
       "disk_gb": 120
     }
-  ]
+  ],
+  "topology": "cloudstack",
+  "versions": {
+    "manager": "4.23",
+    "kvm": "4.23"
+  }
 }

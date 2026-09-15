@@ -1,5 +1,22 @@
 # proxmox_3nodes_networks
 
+Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Il `Vagrantfile` mantiene il percorso assistito già disponibile.
+
+## Due percorsi di avvio
+
+```bash
+./scripts/up.sh                                      # assistito
+VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh pve1
+```
+
+Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
+`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+
+Versioni richieste: **Proxmox VE 9.2**.
+Patch consentite nel ramo indicato; selezione in `lab.json` e pin APT nel guest.
+
 Laboratorio autonomo Vagrant/VirtualBox. **Solo questo lab acceso**; spegnere
 le altre infrastrutture prima di iniziare. Modificare liberamente `Vagrantfile`,
 `lab.json` e gli script locali: non esistono import da altre cartelle.

@@ -131,7 +131,9 @@ Vagrant.configure('2') do |config|
       # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per
       # avviare il kernel PVE prima di completare l’installazione dello stack.
       # Cluster, pool e altre operazioni didattiche sono spiegati nel README.
-      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
+      # Versione software richiesta dal lab.json, distinta dalla versione della box.
+      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",
+        args: [spec.fetch('versions').fetch(node.fetch('role'))]
     end
   end
 end

@@ -1,0 +1,24 @@
+{
+  "id": "k8s_hacontrol_3workers",
+  "subnet": 65,
+  "box": "bento/ubuntu-24.04",
+  "box_version": "202510.26.0",
+  "versions": {
+    "k8s-control": "1.37",
+    "k8s-worker": "1.37",
+    "cilium": "1.20.1"
+  },
+  "internal_networks": [
+    {"name": "cluster", "prefix": "10.65.0"}
+  ],
+  "nodes": [
+    {"name": "lb1", "role": "k8s-lb", "host": 2, "cpus": 2, "memory": 4096},
+    {"name": "lb2", "role": "k8s-lb", "host": 3, "cpus": 2, "memory": 4096},
+    {"name": "control1", "role": "k8s-control", "host": 11, "cpus": 4, "memory": 8192},
+    {"name": "control2", "role": "k8s-control", "host": 12, "cpus": 4, "memory": 8192},
+    {"name": "control3", "role": "k8s-control", "host": 13, "cpus": 4, "memory": 8192},
+    {"name": "worker1", "role": "k8s-worker", "host": 21, "cpus": 6, "memory": 12288},
+    {"name": "worker2", "role": "k8s-worker", "host": 22, "cpus": 6, "memory": 12288},
+    {"name": "worker3", "role": "k8s-worker", "host": 23, "cpus": 6, "memory": 12288}
+  ]
+}

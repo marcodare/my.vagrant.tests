@@ -1,0 +1,13 @@
+{
+  "id": "zsvirt_1node_eval",
+  "topology": "zsvirt",
+  "subnet": 63,
+  "netmask": "255.255.255.128",
+  "mac_id": 64,
+  "box": "local/zsvirt-h84r",
+  "box_version": "0",
+  "internal_networks": [],
+  "nodes": [
+    {"name": "zsvirt1", "role": "zsvirt", "host": 139, "cpus": 8, "memory": 24576, "disk_gb": 100}
+  ]
+}

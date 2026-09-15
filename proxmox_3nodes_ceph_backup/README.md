@@ -1,5 +1,22 @@
 # proxmox_3nodes_ceph_backup
 
+Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Il `Vagrantfile` mantiene il percorso assistito già disponibile.
+
+## Due percorsi di avvio
+
+```bash
+./scripts/up.sh                                      # assistito
+VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh pve1
+```
+
+Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
+`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+
+Versioni richieste: **Proxmox VE 9.2** e **Proxmox Backup Server 4.2**.
+Patch consentite nel ramo indicato; selezione in `lab.json` e pin APT nel guest.
+
 Laboratorio autonomo Vagrant/VirtualBox. **Solo questo lab acceso**; spegnere
 le altre infrastrutture prima di iniziare. Modificare liberamente `Vagrantfile`,
 `lab.json` e gli script locali: non esistono import da altre cartelle.
@@ -66,8 +83,7 @@ assumere che si chiami /dev/sdb: identificarlo per dimensione e layout.
 
 ## Proxmox Backup Server
 
-PBS risponde su **https://192.168.59.20:8007**, con indirizzo storage
-**10.59.1.20** su vmbr1. Ha 8 GiB RAM e un disco aggiuntivo da 240 GB.
+PBS risponde su **https://192.168.59.20:8007**, solo sulla rete principale vmbr0; non ha una NIC sulla rete Ceph. Ha 8 GiB RAM e un disco aggiuntivo da 240 GB.
 
 1. `vagrant ssh pbs1`, poi `sudo passwd root`; accedere come root@pam.
 2. In Administration → Disks identificare il disco **240 GB** non utilizzato.
@@ -75,7 +91,7 @@ PBS risponde su **https://192.168.59.20:8007**, con indirizzo storage
    l'opzione per creare il datastore. Questa operazione formatta il disco scelto.
 3. Controllare Datastore → backup e prendere nota del fingerprint del server.
 4. Nella UI PVE, Datacenter → Storage → Add → Proxmox Backup Server:
-   ID `pbs-backup`, server **10.59.1.20**, datastore `backup`, fingerprint
+   ID `pbs-backup`, server **192.168.59.20**, datastore `backup`, fingerprint
    verificato dalla console PBS e credenziali root@pam impostate al punto 1.
    In seguito esercitarsi con utente/token dedicato e permessi sul datastore.
 5. Eseguire un backup snapshot di VM 100 su pbs-backup. Verificare task concluso
@@ -85,6 +101,13 @@ PBS risponde su **https://192.168.59.20:8007**, con indirizzo storage
 7. Configurare retention (es. keep-last=3), provare prune e poi garbage
    collection: sono operazioni diverse, lo spazio non si libera solo con prune.
 
-Il traffico backup condivide la seconda rete con Ceph. Prima dello stop
+Il traffico backup usa vmbr0 insieme a management, guest e migrazione.
+vmbr1 è dedicato esclusivamente al traffico Ceph. Prima dello stop
 attendere il completamento dei job. PBS sul medesimo host fisico è utile per
 imparare backup/restore, ma non protegge dalla perdita dell'SSD del Bosgame.
+
+### Separazione dei traffici
+
+Due reti del laboratorio: vmbr1 per Ceph (client/public e replica); vmbr0
+per management, Corosync, migrazione, guest e backup. La NIC NAT tecnica
+serve solo Vagrant/download. Non selezionare vmbr1 come rete di migrazione.

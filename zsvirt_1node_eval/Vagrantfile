@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+# Laboratorio sperimentale: richiede una box LOCALE ottenuta dall'OVA ufficiale.
+# Nessun pacchetto ZSvirt viene inventato o installato su una box Debian/Ubuntu.
+require 'json'
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+node = spec.fetch('nodes').first
+
+Vagrant.configure('2') do |config|
+  config.vm.box = spec.fetch('box')
+  config.vm.box_version = spec.fetch('box_version')
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  # La box va preparata con utente vagrant/sudo e NIC 1 NAT in DHCP (README).
+  # Password scelta durante la preparazione, passata solo via ambiente.
+  config.ssh.username = 'vagrant'
+  config.ssh.password = ENV['ZS_VAGRANT_PASSWORD']
+  config.vm.boot_timeout = 900
+  config.vm.define node.fetch('name') do |vm|
+    # NIC 2 management: metà superiore di .63/24; OpenStack usa la metà inferiore.
+    vm.vm.network 'private_network', ip: "192.168.63.#{node.fetch('host')}",
+      netmask: spec.fetch('netmask'), auto_config: false
+    vm.vm.provider 'virtualbox' do |vb|
+      vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
+      vb.memory = node.fetch('memory')
+      vb.cpus = node.fetch('cpus')
+      vb.gui = true # Console necessaria per l'inizializzazione dell'appliance.
+      vb.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
+      vb.customize ['modifyvm', :id, '--macaddress2', '080027400102']
+      vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+    end
+    vm.vm.disk :disk, size: '200GB', primary: true
+    vm.vm.disk :disk, size: "#{node.fetch('disk_gb')}GB", name: 'zsvirt-data'
+    # IP, management ZSvirt e datastore si inizializzano dalla console/UI.
+  end
+end

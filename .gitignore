@@ -13,13 +13,14 @@
 # Git non conserva cartelle vuote: .gitkeep è un segnaposto convenzionale.
 !**/logs/.gitkeep
 
-# Immagini disco, ISO e box Vagrant: file voluminosi da scaricare o ricreare.
+# Immagini disco, appliance OVA, ISO e box: file voluminosi da scaricare o ricreare.
 # Queste regole valgono anche se i file si trovano fuori da disks/ o data/.
 *.vdi
 *.vmdk
 *.qcow2
 *.iso
 *.box
+*.ova
 
 # Log generati durante esecuzione e provisioning, potenzialmente sensibili.
 *.log

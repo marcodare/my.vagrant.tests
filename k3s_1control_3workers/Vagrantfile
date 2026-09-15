@@ -1,0 +1,44 @@
+# frozen_string_literal: true
+# Percorso assistito: crea le VM, configura le reti e prepara il sistema.
+# L'installazione del cluster resta manuale e viene svolta in STEPS.md.
+
+require 'json'
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+Vagrant.configure('2') do |config|
+  config.vm.box = spec.fetch('box')
+  config.vm.box_version = spec.fetch('box_version')
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.boot_timeout = 900
+
+  spec.fetch('nodes').each_with_index do |node, index|
+    subnet = spec.fetch('subnet')
+    mac_id = spec.fetch('mac_id', subnet)
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+    cluster_address = "10.64.0.#{node.fetch('host')}"
+    management_mac = format('080027%02X%02X02', mac_id, index + 1)
+    cluster_mac = format('080027%02X%02X03', mac_id, index + 1)
+
+    config.vm.define node.fetch('name') do |vm|
+      vm.vm.hostname = node.fetch('name')
+      # NIC 1 NAT; NIC 2 management host-only; NIC 3 traffico cluster interno.
+      vm.vm.network 'private_network', ip: address, auto_config: false
+      vm.vm.network 'private_network', ip: cluster_address, auto_config: false,
+        virtualbox__intnet: "#{spec.fetch('id')}-cluster"
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        vb.gui = false
+        vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
+        vb.customize ['modifyvm', :id, '--macaddress3', cluster_mac]
+        vb.customize ['modifyvm', :id, '--nicpromisc3', 'allow-all']
+      end
+      vm.vm.disk :disk, size: '80GB', primary: true
+      vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
+        args: [node.fetch('name'), address, management_mac, cluster_address, cluster_mac]
+      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
+    end
+  end
+end

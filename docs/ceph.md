@@ -5,7 +5,7 @@ KVM del [runbook PVE](proxmox.md). Un disco dati raw da 100 GB per nodo; nessun
 OSD viene creato automaticamente. Tutte le operazioni seguenti sono nei guest.
 
 1. Da UI, su ciascun nodo, aprire **Ceph → Install Ceph** e scegliere la stessa
-   versione supportata da PVE 9 (Squid) e il repository no-subscription. Usare
+   versione supportata da PVE 9.2 (Squid) e il repository no-subscription. Usare
    il wizard evita di duplicare a mano repository e versioni del pacchetto.
 2. Sul primo nodo inizializzare Ceph: public network **10.58.1.0/24**, oppure
    **10.59.1.0/24** nel lab backup. Anche la rete cluster/replica usa lo stesso
@@ -44,4 +44,4 @@ libero; tre VDI sullo stesso SSD non sono tre domini di guasto fisici.
 - Spegnere un nodo: osservare degradazione e quorum; riaccenderlo e attendere
   recovery completa. Con due nodi persi si perde il quorum; non abbassare min_size.
 - Confrontare traffico su `vmbr0` e `vmbr1` usando `ip -s link`.
-- Nel lab backup, osservare la contesa tra backup e Ceph sulla rete vmbr1.
+- Nel lab backup, verificare che PBS/backup usino vmbr0 e non la rete Ceph vmbr1.

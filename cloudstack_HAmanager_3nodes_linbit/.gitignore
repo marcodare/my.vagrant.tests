@@ -1,0 +1,17 @@
+# Stato VM e artefatti locali: non condividere dischi, credenziali o log.
+.vagrant/
+data/*
+!data/README.md
+disks/*
+!disks/README.md
+logs/*
+!logs/.gitkeep
+*.box
+*.vdi
+*.vmdk
+*.qcow2
+*.ova
+*.iso
+*.log
+.env
+.env.*

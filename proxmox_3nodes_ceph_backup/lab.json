@@ -40,7 +40,12 @@
       "host": 20,
       "cpus": 4,
       "memory": 8192,
-      "disk_gb": 240
+      "disk_gb": 240,
+      "attach_internal": false
     }
-  ]
+  ],
+  "versions": {
+    "pve": "9.2",
+    "pbs": "4.2"
+  }
 }
