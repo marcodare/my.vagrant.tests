@@ -21,6 +21,33 @@ come esercizio. Sono selezionati Kubernetes 1.37 e Cilium 1.20.1.
 Usare la variabile anche per `status`, `halt` e `destroy`; non alternare i due
 file sulle stesse VM.
 
+## kubectl dal Bosgame e dal Mac
+
+Il VIP `192.168.65.5` vive sulla rete host-only e non esce dal Bosgame. Entrambi
+i load balancer pubblicano quindi la 6443 su una porta dell'host, in ascolto su
+tutte le interfacce: se `lb1` cade si usa la porta di `lb2`.
+
+| Da dove | Endpoint |
+| --- | --- |
+| Bosgame | `https://192.168.65.5:6443` (VIP) |
+| Mac, via lb1 | `https://<indirizzo-bosgame>:16444` |
+| Mac, via lb2 | `https://<indirizzo-bosgame>:16445` |
+
+A cluster inizializzato:
+
+```bash
+./scripts/kubeconfig.sh                 # usa il primo valore di api_sans
+./scripts/kubeconfig.sh 100.102.0.122   # oppure un indirizzo esplicito
+```
+
+Lo script scrive tre kubeconfig `.local.`, esclusi dal Git perché contengono
+credenziali admin. HAProxy ascolta su tutte le interfacce, non solo sul VIP:
+serve perché il port forward di VirtualBox arriva dalla NIC NAT.
+
+`kubeadm init` va eseguito con `--apiserver-cert-extra-sans` che includa gli
+indirizzi di `api_sans` in `lab.json`, altrimenti il certificato copre solo VIP e
+nomi interni e kubectl dal Mac fallisce: vedere [STEPS.md](STEPS.md).
+
 La topologia esercita quorum e failover dei servizi virtuali. Tutte le VM sono
 sullo stesso Bosgame e sullo stesso SSD: non offre HA fisica e non va presentata
 come ambiente di produzione reale. Mancano inoltre storage persistente HA,

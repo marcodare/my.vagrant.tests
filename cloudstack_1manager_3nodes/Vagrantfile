@@ -10,6 +10,13 @@
 require 'json'
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
+# /etc/hosts generato dai nodi dichiarati in lab.json, sulla rete privata che
+# CloudStack usa per management e storage.
+lab_hosts = spec.fetch('nodes').map do |lab_node|
+  "#{spec.fetch('internal_networks').fetch(0).fetch('prefix')}.#{lab_node.fetch('host')} " \
+    "#{lab_node.fetch('name')}.lab.test #{lab_node.fetch('name')}"
+end.join(';')
+
 
 # 2. IMPOSTAZIONI COMUNI A TUTTE LE VM
 # '2' è la versione del formato di configurazione, non di VirtualBox.
@@ -125,7 +132,7 @@ Vagrant.configure('2') do |config|
       # il ruolo indicato in lab.json (pve, pbs, manager oppure kvm).
       # I percorsi sono locali a questo laboratorio, senza import condivisi.
       vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
-        args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s]
+        args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s, lab_hosts]
 
       # Il provisioning parte al primo up, oppure con vagrant provision/--provision.
       # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per

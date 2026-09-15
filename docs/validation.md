@@ -1,6 +1,6 @@
 # Verifiche statiche dei laboratori
 
-Eseguite il 15 settembre 2026 sulla macchina di sviluppo macOS ARM, senza
+Eseguite il 15 settembre 2026 sul Bosgame (Ubuntu 26.04.1 amd64), senza
 installare pacchetti host e senza avviare VM:
 
 | Controllo | Esito |
@@ -12,13 +12,18 @@ installare pacchetti host e senza avviare VM:
 | Topologie: IP, MAC, risorse, box/ruoli, file locali | OK |
 | Ruff, codice Python | OK |
 | Mypy strict, codice Python e test | OK |
-| Pytest, configurazioni, versioni e isolamento dei percorsi | 13 passed |
+| Pytest, configurazioni, versioni e isolamento dei percorsi | 20 passed |
 | Bandit, strumenti Python | Nessun problema rilevato |
 | Link locali dei README e runbook | OK |
 
-Per Vagrant è stata usata una directory temporanea con `VAGRANT_HOME`, perché
-il workspace di sviluppo non può scrivere nella configurazione globale
-dell'utente. La validazione finale è passata senza modificarla.
+`./scripts/validate.sh` salta e riepiloga gli strumenti assenti invece di
+interrompersi: prima un `ruby` mancante fermava lo script prima di
+`check_layout.py`, shellcheck e `vagrant validate`.
+
+I controlli statici ora coprono anche gli errori che si manifestavano solo
+all'avvio: segmenti host-only fuori dal pool accettato da VirtualBox, porte host
+duplicate fra laboratori, indirizzi ripetuti a mano nei Vagrantfile invece di
+essere letti da `lab.json`, e la raggiungibilità dichiarata dell'API Kubernetes.
 
 Le box Bento amd64/versione dichiarata e gli indici repository host sono stati
 consultati online. Queste verifiche non dimostrano che provisioning, driver
@@ -38,3 +43,6 @@ OpenStack richiede il deployment Kolla descritto nel proprio README.
 
 I laboratori Kubernetes sono stati verificati staticamente. Non sono stati
 eseguiti kubeadm, K3s, Cilium, failover VRRP/etcd o test dei workload sul Bosgame.
+Restano da provare sul campo anche il port forward dell'API, l'accesso `kubectl`
+dal Mac e la validità delle SAN del certificato: la configurazione è dichiarata e
+coerente, ma non è stata esercitata su un cluster acceso.

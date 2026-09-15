@@ -8,6 +8,19 @@ import re
 from pathlib import Path
 from typing import Any
 
+# VirtualBox su Linux consente le reti host-only elencate in
+# /etc/vbox/networks.conf. Senza quel file vale il solo 192.168.56.0/21, che si
+# ferma a 192.168.63.255 e taglierebbe fuori i lab Kubernetes. Il progetto
+# dichiara qui il pool che configure.host.sh garantisce sull'host. Servono due
+# reti perché 56-71 non è esprimibile con un singolo prefisso: il confine /20
+# cade su 192.168.48.0 e 192.168.64.0.
+HOSTONLY_POOL = (
+    ipaddress.IPv4Network("192.168.56.0/21"),
+    ipaddress.IPv4Network("192.168.64.0/21"),
+)
+SUBNET_MIN = min(int(net.network_address.packed[2]) for net in HOSTONLY_POOL)
+SUBNET_MAX = max(int(net.broadcast_address.packed[2]) for net in HOSTONLY_POOL)
+
 ROLE_BOXES = {
     "pve": "bento/debian-13",
     "pbs": "bento/debian-13",
@@ -51,7 +64,7 @@ def load_spec(directory: Path) -> dict[str, Any]:
         r"[A-Za-z0-9_]+", spec["id"]
     ):
         raise ValueError("ID non valido o diverso dalla cartella")
-    integer(spec.get("subnet"), 56, 65, "subnet")
+    integer(spec.get("subnet"), SUBNET_MIN, SUBNET_MAX, "subnet")
     integer(spec.get("mac_id", spec["subnet"]), 1, 255, "mac_id")
     if spec.get("netmask", "255.255.255.0") not in {"255.255.255.0", "255.255.255.128"}:
         raise ValueError("Netmask prevista /24 o /25")
@@ -95,6 +108,18 @@ def load_spec(directory: Path) -> dict[str, Any]:
                 )
         if "attach_internal" in node and type(node["attach_internal"]) is not bool:
             raise ValueError("attach_internal deve essere booleano")
+        if "api_host_port" in node:
+            integer(node["api_host_port"], 1024, 65535, "api_host_port")
+    sans = spec.get("api_sans", [])
+    if not isinstance(sans, list) or not all(
+        isinstance(san, str) and san for san in sans
+    ):
+        raise ValueError("api_sans deve essere una lista di stringhe non vuote")
+    vip = spec.get("api_vip_host")
+    if vip is not None:
+        integer(vip, 2, 254, "api_vip_host")
+        if vip in hosts:
+            raise ValueError("api_vip_host coincide con l'IP di un nodo")
     netmask = spec.get("netmask", "255.255.255.0")
     segments = {
         ipaddress.IPv4Interface(
@@ -107,6 +132,12 @@ def load_spec(directory: Path) -> dict[str, Any]:
             "Tutti i nodi devono appartenere allo stesso segmento host-only"
         )
     segment = next(iter(segments))
+    if not any(segment.subnet_of(allowed) for allowed in HOSTONLY_POOL):
+        pool = ", ".join(str(allowed) for allowed in HOSTONLY_POOL)
+        raise ValueError(
+            f"Segmento host-only {segment} fuori dal pool consentito ({pool}): "
+            "VirtualBox rifiuterebbe la rete e vagrant up fallirebbe"
+        )
     for node in nodes:
         address = ipaddress.IPv4Address(f"192.168.{spec['subnet']}.{node['host']}")
         if address in {

@@ -9,12 +9,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.lab_config import load_spec, mac_address  # noqa: E402
+from scripts.lab_config import HOSTONLY_POOL, load_spec, mac_address  # noqa: E402
 
 
 def main() -> None:
     subnets: set[ipaddress.IPv4Network] = set()
     macs: set[str] = set()
+    # Le porte pubblicate sull'host sono globali: due lab che ne condividono una
+    # collidono anche restando spenti a turno, perché Vagrant le assegna all'up.
+    api_ports: dict[int, str] = {}
     paths = sorted(ROOT.glob("*/lab.json"))
     if not paths:
         raise ValueError("Nessun laboratorio trovato")
@@ -67,8 +70,17 @@ def main() -> None:
                 if mac in macs:
                     raise ValueError(f"MAC duplicato: {mac}")
                 macs.add(mac)
+        for node in spec["nodes"]:
+            port = node.get("api_host_port")
+            if port is None:
+                continue
+            if port in api_ports:
+                raise ValueError(f"Porta host {port} già usata da {api_ports[port]}")
+            api_ports[port] = f"{spec['id']}/{node['name']}"
         ram = sum(node["memory"] for node in spec["nodes"]) // 1024
-        print(f"{spec['id']}: {len(spec['nodes'])} nodi, {ram} GiB RAM")
+        print(f"{spec['id']}: {len(spec['nodes'])} nodi, {ram} GiB RAM, {segment}")
+    pool = ", ".join(str(allowed) for allowed in HOSTONLY_POOL)
+    print(f"Segmenti host-only tutti dentro il pool consentito: {pool}.")
 
 
 if __name__ == "__main__":

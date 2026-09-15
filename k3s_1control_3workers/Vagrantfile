@@ -5,6 +5,17 @@
 require 'json'
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
+# La rete cluster viene letta da lab.json invece di essere ripetuta qui: il
+# percorso assistito e Vagrant.start devono descrivere la stessa topologia.
+cluster_net = spec.fetch('internal_networks').fetch(0)
+cluster_prefix = cluster_net.fetch('prefix')
+
+# /etc/hosts generato dai nodi realmente dichiarati, così il file dentro il
+# guest non elenca mai macchine che questo laboratorio non crea.
+hosts = spec.fetch('nodes').map do |node|
+  "#{cluster_prefix}.#{node.fetch('host')} #{node.fetch('name')}"
+end.join(';')
+
 Vagrant.configure('2') do |config|
   config.vm.box = spec.fetch('box')
   config.vm.box_version = spec.fetch('box_version')
@@ -16,7 +27,7 @@ Vagrant.configure('2') do |config|
     subnet = spec.fetch('subnet')
     mac_id = spec.fetch('mac_id', subnet)
     address = "192.168.#{subnet}.#{node.fetch('host')}"
-    cluster_address = "10.64.0.#{node.fetch('host')}"
+    cluster_address = "#{cluster_prefix}.#{node.fetch('host')}"
     management_mac = format('080027%02X%02X02', mac_id, index + 1)
     cluster_mac = format('080027%02X%02X03', mac_id, index + 1)
 
@@ -26,6 +37,16 @@ Vagrant.configure('2') do |config|
       vm.vm.network 'private_network', ip: address, auto_config: false
       vm.vm.network 'private_network', ip: cluster_address, auto_config: false,
         virtualbox__intnet: "#{spec.fetch('id')}-cluster"
+
+      # L'API sul solo host-only sarebbe raggiungibile dal Bosgame ma non da
+      # altre macchine. La NAT la pubblica anche su LAN/Tailscale: host_ip
+      # 0.0.0.0 perché il default di Vagrant è il solo 127.0.0.1.
+      # Il certificato deve includere quegli indirizzi: vedere STEPS.md.
+      if node['api_host_port']
+        vm.vm.network 'forwarded_port', guest: 6443, host: node.fetch('api_host_port'),
+          host_ip: '0.0.0.0', id: 'kube-api'
+      end
+
       vm.vm.provider 'virtualbox' do |vb|
         vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
         vb.memory = node.fetch('memory')
@@ -33,11 +54,14 @@ Vagrant.configure('2') do |config|
         vb.gui = false
         vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
         vb.customize ['modifyvm', :id, '--macaddress3', cluster_mac]
+        # Promiscuo su entrambe le NIC del lab, come negli altri laboratori:
+        # serve al traffico con MAC sorgente diverso da quello della NIC.
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
         vb.customize ['modifyvm', :id, '--nicpromisc3', 'allow-all']
       end
       vm.vm.disk :disk, size: '80GB', primary: true
       vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
-        args: [node.fetch('name'), address, management_mac, cluster_address, cluster_mac]
+        args: [node.fetch('name'), address, management_mac, cluster_address, cluster_mac, hosts]
       vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
     end
   end

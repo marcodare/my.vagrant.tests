@@ -5,6 +5,17 @@
 require 'json'
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
+# Rete cluster e VIP dell'API arrivano da lab.json: erano ripetuti a mano qui,
+# in base.sh e in k8s-lb.sh, con il rischio che divergessero fra loro.
+cluster_prefix = spec.fetch('internal_networks').fetch(0).fetch('prefix')
+subnet = spec.fetch('subnet')
+api_vip = "192.168.#{subnet}.#{spec.fetch('api_vip_host')}"
+
+# /etc/hosts costruito dai nodi dichiarati, più il nome del VIP dell'API.
+hosts = (["#{api_vip} kube-api.lab.test kube-api"] + spec.fetch('nodes').map do |node|
+  "#{cluster_prefix}.#{node.fetch('host')} #{node.fetch('name')}"
+end).join(';')
+
 Vagrant.configure('2') do |config|
   config.vm.box = spec.fetch('box')
   config.vm.box_version = spec.fetch('box_version')
@@ -13,17 +24,28 @@ Vagrant.configure('2') do |config|
   config.vm.boot_timeout = 900
 
   spec.fetch('nodes').each_with_index do |node, index|
-    subnet = spec.fetch('subnet')
+    mac_id = spec.fetch('mac_id', subnet)
     address = "192.168.#{subnet}.#{node.fetch('host')}"
-    cluster_address = "10.65.0.#{node.fetch('host')}"
-    management_mac = format('080027%02X%02X02', subnet, index + 1)
-    cluster_mac = format('080027%02X%02X03', subnet, index + 1)
+    cluster_address = "#{cluster_prefix}.#{node.fetch('host')}"
+    management_mac = format('080027%02X%02X02', mac_id, index + 1)
+    cluster_mac = format('080027%02X%02X03', mac_id, index + 1)
+
     config.vm.define node.fetch('name') do |vm|
       vm.vm.hostname = node.fetch('name')
       # NIC 1 NAT; NIC 2 management/API; NIC 3 traffico cluster ed etcd.
       vm.vm.network 'private_network', ip: address, auto_config: false
       vm.vm.network 'private_network', ip: cluster_address, auto_config: false,
         virtualbox__intnet: "#{spec.fetch('id')}-cluster"
+
+      # Ogni load balancer pubblica l'API su una porta host diversa, così
+      # l'accesso da fuori sopravvive alla perdita di uno dei due.
+      # host_ip 0.0.0.0 espone anche su LAN/Tailscale; il default sarebbe
+      # 127.0.0.1 e il Mac non arriverebbe. SAN del certificato: vedere STEPS.md.
+      if node['api_host_port']
+        vm.vm.network 'forwarded_port', guest: 6443, host: node.fetch('api_host_port'),
+          host_ip: '0.0.0.0', id: 'kube-api'
+      end
+
       vm.vm.provider 'virtualbox' do |vb|
         vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
         vb.memory = node.fetch('memory')
@@ -31,13 +53,32 @@ Vagrant.configure('2') do |config|
         vb.gui = false
         vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
         vb.customize ['modifyvm', :id, '--macaddress3', cluster_mac]
+        # Il VIP Keepalived si sposta fra lb1 e lb2: la NIC management deve
+        # accettare traffico destinato a un MAC diverso dal proprio.
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
         vb.customize ['modifyvm', :id, '--nicpromisc3', 'allow-all']
       end
       vm.vm.disk :disk, size: '80GB', primary: true
       vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
-        args: [node.fetch('name'), address, management_mac, cluster_address, cluster_mac]
+        args: [node.fetch('name'), address, management_mac, cluster_address, cluster_mac, hosts]
+      # I load balancer ricevono backend, peer VRRP e priorità calcolati da
+      # lab.json: prima erano dedotti dall'hostname e ripetuti nello script.
+      role_args =
+        if node.fetch('role') == 'k8s-lb'
+          lbs = spec.fetch('nodes').select { |n| n.fetch('role') == 'k8s-lb' }
+          controls = spec.fetch('nodes').select { |n| n.fetch('role') == 'k8s-control' }
+          backends = controls.map do |n|
+            "#{n.fetch('name')},#{cluster_prefix}.#{n.fetch('host')}"
+          end.join(';')
+          peers = lbs.reject { |n| n.equal?(node) }.map do |n|
+            "192.168.#{subnet}.#{n.fetch('host')}"
+          end.join(';')
+          [api_vip, backends, address, peers, (100 - lbs.index(node) * 10).to_s]
+        else
+          [spec.fetch('versions').fetch(node.fetch('role'), '')]
+        end
       vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",
-        args: [spec.fetch('versions').fetch(node.fetch('role'), '')]
+        args: role_args
     end
   end
 end

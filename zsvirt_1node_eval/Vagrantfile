@@ -5,6 +5,12 @@ require 'json'
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 node = spec.fetch('nodes').first
 
+# Subnet e MAC derivano da lab.json come negli altri laboratori: erano scritti a
+# mano e non seguivano più il file se questo cambiava.
+subnet = spec.fetch('subnet')
+mac_id = spec.fetch('mac_id', subnet)
+management_mac = format('080027%02X%02X02', mac_id, 1)
+
 Vagrant.configure('2') do |config|
   config.vm.box = spec.fetch('box')
   config.vm.box_version = spec.fetch('box_version')
@@ -17,7 +23,7 @@ Vagrant.configure('2') do |config|
   config.vm.boot_timeout = 900
   config.vm.define node.fetch('name') do |vm|
     # NIC 2 management: metà superiore di .63/24; OpenStack usa la metà inferiore.
-    vm.vm.network 'private_network', ip: "192.168.63.#{node.fetch('host')}",
+    vm.vm.network 'private_network', ip: "192.168.#{subnet}.#{node.fetch('host')}",
       netmask: spec.fetch('netmask'), auto_config: false
     vm.vm.provider 'virtualbox' do |vb|
       vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
@@ -25,7 +31,7 @@ Vagrant.configure('2') do |config|
       vb.cpus = node.fetch('cpus')
       vb.gui = true # Console necessaria per l'inizializzazione dell'appliance.
       vb.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
-      vb.customize ['modifyvm', :id, '--macaddress2', '080027400102']
+      vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
       vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
     end
     vm.vm.disk :disk, size: '200GB', primary: true

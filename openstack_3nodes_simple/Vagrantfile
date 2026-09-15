@@ -10,6 +10,11 @@
 require 'json'
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
+# /etc/hosts generato dai nodi dichiarati in lab.json, sulla management host-only.
+lab_hosts = spec.fetch('nodes').map do |lab_node|
+  "192.168.#{spec.fetch('subnet')}.#{lab_node.fetch('host')} #{lab_node.fetch('name')}"
+end.join(';')
+
 
 # 2. IMPOSTAZIONI COMUNI A TUTTE LE VM
 # '2' è la versione del formato di configurazione, non di VirtualBox.
@@ -120,12 +125,13 @@ Vagrant.configure('2') do |config|
 
       # 7. PROVISIONING: CONFIGURAZIONE DENTRO IL GUEST
       # Vagrant esegue gli script nell’ordine dichiarato, di default con sudo.
-      # base.sh riceve: ruolo, hostname, IP management, MAC NIC 2, reti extra, subnet.
+      # base.sh riceve: ruolo, hostname, IP management, MAC NIC 2, reti extra,
+      # subnet e le voci /etc/hosts dei nodi di questo laboratorio.
       # Prepara hostname, pacchetti comuni e reti; lo script successivo installa
       # il ruolo indicato in lab.json (pve, pbs, manager oppure kvm).
       # I percorsi sono locali a questo laboratorio, senza import condivisi.
       vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
-        args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s]
+        args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s, lab_hosts]
 
       if node.fetch('role') == 'os-controller'
         vm.vm.provision 'file', source: 'config', destination: '/home/vagrant/infra-kolla'

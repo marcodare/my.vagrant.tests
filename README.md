@@ -49,6 +49,12 @@ consumano la RAM già assegnata ai nodi. Le vCPU sono condivise con l'host.
 
 5. Seguire il README del laboratorio per credenziali, cluster ed esercizi.
 
+Lo script autorizza in `/etc/vbox/networks.conf` i range host-only del progetto
+(`192.168.56.0/21` e `192.168.64.0/21`), necessari perché VirtualBox di default
+si ferma a `192.168.63.255` e rifiuterebbe i lab k3s/k8s. Le righe già presenti
+per altri progetti non vengono toccate, e un repository APT già configurato
+sull'host viene rispettato invece di essere duplicato.
+
 Lo script host configura APT Oracle/HashiCorp con `signed-by`, installa
 VirtualBox 7.2, Vagrant, driver/header e strumenti di verifica, aggiunge l'utente
 a `vboxusers` e imposta `kvm.enable_virt_at_load=0` via modprobe per il prossimo

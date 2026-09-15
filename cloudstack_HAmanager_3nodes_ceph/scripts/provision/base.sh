@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Due reti del lab: fake public su cloudbr1, privata/guest VLAN su cloudbr0.
 set -euo pipefail
-role=$1 name=$2 public_ip=$3 public_mac=$4 extras=$5 subnet=$6
+role=$1 name=$2 public_ip=$3 public_mac=$4 extras=$5 subnet=$6 hosts=$7
 export DEBIAN_FRONTEND=noninteractive
 [[ $EUID == 0 && -d /home/vagrant ]] || { echo 'Solo guest Vagrant'; exit 1; }
-[[ $subnet =~ ^(60|61|62)$ && $public_ip == "192.168.$subnet."* ]] || exit 1
+[[ $public_ip == "192.168.$subnet."* ]] || {
+  echo "IP $public_ip non appartiene alla fake public 192.168.$subnet.0/24 del lab" >&2
+  exit 1
+}
 [[ -n $extras && $extras != *';'* ]] || { echo 'Richiesta una rete privata'; exit 1; }
 IFS=',' read -r private_mac private_ip _unused_bridge <<< "$extras"
 hostnamectl set-hostname "$name"
@@ -12,11 +15,9 @@ sed -i '/# BEGIN INFRA LAB/,/# END INFRA LAB/d' /etc/hosts
 sed -i -E "/^127\.[0-9.]+[[:space:]].*\b${name}\b/d" /etc/hosts
 {
   echo '# BEGIN INFRA LAB'
-  echo "10.$subnet.0.10 manager.lab.test manager"
-  for n in 1 2 3; do
-    echo "10.$subnet.0.$((10+n)) mgmt$n.lab.test mgmt$n"
-    echo "10.$subnet.0.$((20+n)) kvm$n.lab.test kvm$n"
-  done
+  # Voci costruite dal Vagrantfile a partire dai nodi di lab.json: prima erano
+  # un elenco fisso che citava anche macchine assenti da questo laboratorio.
+  tr ';' '\n' <<< "$hosts"
   echo '# END INFRA LAB'
 } >> /etc/hosts
 apt-get update

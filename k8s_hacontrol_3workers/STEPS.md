@@ -39,16 +39,31 @@ Su `control1` creare una configurazione kubeadm con:
 - `localAPIEndpoint.advertiseAddress: 10.65.0.11`;
 - `networking.podSubnet: 10.244.0.0/16` e `serviceSubnet: 10.96.0.0/12`;
 - `nodeRegistration.kubeletExtraArgs.node-ip: 10.65.0.11`;
-- `apiServer.certSANs` contenente nome e VIP;
+- `apiServer.certSANs` con nome e VIP **più** gli indirizzi di `api_sans` in
+  `lab.json`: il certificato copre solo ciò che è elencato, quindi senza quelli
+  dell'host kubectl dal Mac fallirebbe la verifica TLS;
 - `KubeletConfiguration.cgroupDriver: systemd`.
 
-Poi inizializzare e conservare gli output fuori dal repository:
+Poi inizializzare e conservare gli output fuori dal repository. Le SAN si
+possono dichiarare nel file oppure, equivalentemente, sulla riga di comando:
 
 ```bash
-sudo kubeadm init --config kubeadm-init.yaml --upload-certs
+sudo kubeadm init --config kubeadm-init.yaml --upload-certs \
+  --apiserver-cert-extra-sans 192.168.65.5,kube-api.lab.test,127.0.0.1,192.168.142.57,100.102.0.122,aipc.olm-velociraptor.ts.net
 mkdir -p ~/.kube
 sudo cp /etc/kubernetes/admin.conf ~/.kube/config
 sudo chown "$(id -u):$(id -g)" ~/.kube/config
+```
+
+Fuori da questo host sostituire gli indirizzi con quelli reali. Se il cluster è
+già inizializzato senza le SAN giuste, si rigenera il solo certificato dell'API:
+`sudo rm /etc/kubernetes/pki/apiserver.{crt,key}`, `sudo kubeadm init phase certs
+apiserver --config kubeadm-init.yaml`, quindi riavviare il pod statico.
+
+Generare i kubeconfig per host e Mac (dalla cartella del lab, sul Bosgame):
+
+```bash
+./scripts/kubeconfig.sh
 ```
 
 Il token e la certificate key sono credenziali temporanee: non inserirli in
@@ -73,7 +88,8 @@ kubectl get --raw='/readyz?verbose'
 
 Verificare DNS, NetworkPolicy default-deny/allow, distribuzione pod, PodDisruptionBudget,
 rolling update, drain e ritorno di un worker. Spegnere un control plane alla volta
-e controllare API ed etcd; spegnere un LB alla volta e controllare la VIP. Provare
+e controllare API ed etcd; spegnere un LB alla volta e controllare la VIP e, dal
+Mac, che l'accesso continui sull'altra porta pubblicata (16444/16445). Provare
 snapshot e restore etcd in una copia sacrificabile del lab. Aggiungere poi ingress,
 MetalLB/L2, CSI con storage realmente replicato, monitoring, audit e backup esterno:
 sono parti necessarie di una piattaforma di produzione, fuori dalla base attuale.

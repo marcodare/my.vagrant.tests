@@ -13,8 +13,19 @@
 - **Repository assente:** lo script si ferma se il repository `resolute` non è
   disponibile. Non sostituirlo con `noble` o altre release senza verifica.
 - **VirtualBox/Vagrant incompatibili:** controllare le versioni installate e
-  il supporto del provider. Le box di questo progetto sono amd64; non avviarle
-  sulla macchina macOS ARM usata per sviluppare il repository.
+  il supporto del provider. Le box di questo progetto sono amd64.
+- **Rete host-only rifiutata:** un `vagrant up` che fallisce creando
+  l'interfaccia, di solito sui lab k3s/k8s, significa che il range non è
+  autorizzato in `/etc/vbox/networks.conf`. Senza quel file VirtualBox accetta
+  solo `192.168.56.0/21`, cioè fino a `192.168.63.255`. Verificare con
+  `./configure.host.sh --check` e, se serve, rieseguire `sudo ./configure.host.sh`:
+  aggiunge i due range del progetto senza togliere quelli di altri laboratori.
+- **APT: "valori in conflitto per l'opzione Signed-By":** l'host ha già lo stesso
+  repository (tipicamente HashiCorp) configurato da un'altra procedura con il
+  keyring in un percorso diverso. Lo script ora rileva la sorgente esistente e
+  non ne aggiunge una seconda; se l'errore resta da un tentativo precedente,
+  rimuovere il file `infra-*.list` in eccesso e rilanciare lo script, che in
+  apertura ripulisce comunque le proprie sorgenti.
 - **Reti host-only:** controllare `VBoxManage list hostonlyifs` e
   `VBoxManage list dhcpservers`. Eventuali DHCP su una rete del lab possono
   interferire con IP statici e DHCP CloudStack: disabilitare solo quello della

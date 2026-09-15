@@ -26,18 +26,34 @@ hostname risolva sull'indirizzo `10.64.0.x`.
 
 Su `control1` scegliere un token casuale e non salvarlo nel repository:
 
+Il certificato dell'API copre solo gli indirizzi dichiarati: ogni `--tls-san`
+corrisponde a un modo di raggiungere il cluster. Senza quello dell'host, kubectl
+dal Mac fallirebbe la verifica TLS. L'elenco sta in `api_sans` di `lab.json`.
+
 ```bash
 read -rsp 'Token K3s: ' K3S_TOKEN; echo
 curl -sfL https://get.k3s.io | sudo INSTALL_K3S_VERSION='v1.36.4+k3s1' \
   K3S_TOKEN="$K3S_TOKEN" sh -s - server \
   --node-ip 10.64.0.10 --advertise-address 10.64.0.10 \
   --flannel-iface enpcluster --write-kubeconfig-mode 600 \
-  --secrets-encryption
+  --secrets-encryption \
+  --tls-san 192.168.64.10 \
+  --tls-san 127.0.0.1 \
+  --tls-san 192.168.142.57 \
+  --tls-san 100.102.0.122 \
+  --tls-san aipc.olm-velociraptor.ts.net
 sudo k3s kubectl get nodes
 ```
 
 Se il nome dell'interfaccia scelto durante la configurazione manuale è diverso,
-sostituire `enpcluster`.
+sostituire `enpcluster`. Fuori da questo host, sostituire gli indirizzi dei
+`--tls-san` con quelli con cui si raggiungerà davvero l'API.
+
+Generare i kubeconfig per host e Mac (dalla cartella del lab, sul Bosgame):
+
+```bash
+./scripts/kubeconfig.sh
+```
 
 ## 4. Worker
 

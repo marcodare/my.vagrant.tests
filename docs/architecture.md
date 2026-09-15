@@ -22,9 +22,17 @@ ogni cartella è autosufficiente e può essere copiata da sola.
 Il segmento nella colonna centrale è **host-only**, accessibile dal Bosgame.
 In CloudStack rappresenta la fake public; il management effettivo è sulla privata. Le reti aggiuntive sono
 **internal network**, accessibili solo alle VM dello stesso lab. Nessuna rete è
-bridged sulla LAN fisica. I range host-only rientrano in 192.168.56.0/21,
-intervallo predefinito consentito da VirtualBox su Linux; non serve allargarne la
-policy. Prima dell'avvio verificare assenza di sovrapposizioni con VPN/LAN.
+bridged sulla LAN fisica. Prima dell'avvio verificare assenza di sovrapposizioni
+con VPN/LAN.
+
+VirtualBox su Linux accetta una rete host-only solo se compresa in
+`/etc/vbox/networks.conf`. Senza quel file vale il default `192.168.56.0/21`, che
+si ferma a `192.168.63.255`: i lab k3s e k8s, su `192.168.64` e `192.168.65`,
+verrebbero rifiutati all'avvio. Il progetto usa quindi due range,
+`192.168.56.0/21` e `192.168.64.0/21`, che `configure.host.sh` aggiunge al file
+senza rimuovere quelli già presenti per altri progetti. Il vincolo è verificato
+staticamente da `HOSTONLY_POOL` in `scripts/lab_config.py`, così una subnet fuori
+range viene respinta prima di `vagrant up` invece di fallire sull'host.
 
 La prima NIC resta NAT/DHCP per SSH e APT; non va usata per Corosync o Ceph.
 NIC successive identificate tramite MAC, non assumendo nomi tipo eth1/enp0s8.
@@ -58,6 +66,26 @@ trasporta anche VLAN guest 100–199. Le VIP HA sono .4 gateway/DNS, .5 API,
 OpenStack e ZSvirt usano due metà disgiunte di .63/24: impostare esplicitamente
 netmask /25 in VirtualBox. Non riusare una host-only /24 preesistente per entrambe.
 ZSvirt usa `mac_id=64` per mantenere MAC distinti pur condividendo il terzo ottetto.
+
+## Accesso all'API Kubernetes
+
+La rete host-only è raggiungibile dal solo Bosgame. Per usare `kubectl` anche dal
+Mac, i lab k3s e k8s dichiarano in `lab.json` un `api_host_port` per nodo:
+VirtualBox pubblica la 6443 del guest su quella porta dell'host, in ascolto su
+`0.0.0.0` e non sul solo loopback. k3s espone `control1`; k8s espone entrambi i
+load balancer, così l'accesso esterno sopravvive alla perdita di uno dei due.
+
+| Lab | Dal Bosgame | Da remoto |
+| --- | --- | --- |
+| k3s | `192.168.64.10:6443` host-only | `<bosgame>:16443` |
+| k8s | `192.168.65.5:6443` VIP Keepalived | `<bosgame>:16444` lb1, `:16445` lb2 |
+
+Il VIP non esce dal Bosgame: da remoto si passa sempre dalle porte pubblicate.
+Gli indirizzi con cui si raggiunge l'API devono comparire nel certificato del
+server, quindi in `api_sans` di `lab.json` e nei flag `--tls-san` (k3s) o
+`--apiserver-cert-extra-sans` (kubeadm). `scripts/kubeconfig.sh` di ciascun lab
+genera i kubeconfig già puntati agli endpoint giusti; i file hanno estensione
+`.local.` e restano fuori dal Git perché contengono credenziali admin.
 
 Vagrant gestisce creazione e rimozione dei dischi con il provider. Non spostare
 VDI né cancellare `.vagrant` per tentare un reset. Le cartelle `disks/` sono
