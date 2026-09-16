@@ -4,7 +4,7 @@ trap 'echo "Errore alla riga $LINENO: configurazione interrotta." >&2' ERR
 
 if [[ ${1:-} == --help ]]; then
   echo 'Uso: sudo ./configure.host.sh [--check]'
-  echo 'Installa VirtualBox 7.2 e Vagrant dai repository ufficiali su Ubuntu 26.04 amd64.'
+  echo 'Installa VirtualBox, Vagrant e strumenti per le box su Ubuntu 26.04 amd64.'
   echo '--check: controlli in sola lettura; eseguibile senza sudo.'
   exit 0
 fi
@@ -35,8 +35,28 @@ hostonly_ranges_missing() {
 }
 
 if [[ ${1:-} == --check ]]; then
+  required_commands=(
+    VBoxManage vagrant packer docker envsubst curl gpg gpgv openssl sha256sum
+  )
+  for command_name in "${required_commands[@]}"; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      echo "Comando host mancante: $command_name" >&2
+      exit 1
+    }
+  done
   VBoxManage --version
   vagrant --version
+  packer version
+  docker version || {
+    echo "Docker presente ma non accessibile all'utente corrente." >&2
+    echo 'Configurare esternamente daemon e permessi Docker, poi ripetere il controllo.' >&2
+    exit 1
+  }
+  packer_version=$(packer version | awk 'NR == 1 {sub(/^v/, "", $2); print $2}')
+  dpkg --compare-versions "$packer_version" ge 1.14.0 || {
+    echo "Packer $packer_version non supportato: richiesta versione >= 1.14.0." >&2
+    exit 1
+  }
   test -c /dev/vboxdrv || { echo 'Driver VirtualBox non caricato: controllare DKMS/Secure Boot.'; exit 1; }
   if hostonly_ranges_missing; then
     echo "Reti host-only del progetto non autorizzate in $VBOX_NETWORKS_CONF:" >&2
@@ -54,13 +74,19 @@ fi
 [[ $EUID == 0 ]] || { echo 'Eseguire con sudo.' >&2; exit 1; }
 lab_user=${SUDO_USER:-}
 [[ -n $lab_user && $lab_user != root ]] || { echo 'Usare sudo dal proprio account, non una login root.' >&2; exit 1; }
+runuser -u "$lab_user" -- docker version || {
+  echo "Docker non è accessibile all'utente $lab_user." >&2
+  echo 'Configurare esternamente daemon e permessi Docker, quindi rieseguire lo script.' >&2
+  exit 1
+}
 
 export DEBIAN_FRONTEND=noninteractive
 # Un tentativo interrotto può aver lasciato sorgenti in conflitto con quelle già
 # presenti sull'host, e in quel caso ogni apt-get update fallisce. Si rimuovono
 # qui le sole sorgenti scritte da questo script, così il nuovo tentativo riparte
 # pulito e add_repo può decidere di nuovo se servono davvero.
-rm -f /etc/apt/sources.list.d/infra-virtualbox.list /etc/apt/sources.list.d/infra-vagrant.list
+rm -f /etc/apt/sources.list.d/infra-virtualbox.list \
+  /etc/apt/sources.list.d/infra-vagrant.list
 apt-get update
 apt-get install -y ca-certificates curl gnupg dkms build-essential "linux-headers-$(uname -r)" mokutil
 # Non usare repository di altre release come fallback.
@@ -95,7 +121,9 @@ add_repo() {
 add_repo virtualbox https://download.virtualbox.org/virtualbox/debian contrib /etc/apt/keyrings/infra-oracle.gpg
 add_repo vagrant https://apt.releases.hashicorp.com main /etc/apt/keyrings/infra-hashicorp.gpg
 apt-get update
-apt-get install -y virtualbox-7.2 vagrant git ruby python3 python3-venv shellcheck jq unzip nfs-common
+apt-get install -y virtualbox-7.2 vagrant packer gettext-base openssl \
+  git ruby python3 python3-venv \
+  shellcheck jq unzip nfs-common
 usermod -aG vboxusers "$lab_user"
 
 install -d -m 0755 /etc/vbox
@@ -113,11 +141,20 @@ chmod 0644 "$VBOX_NETWORKS_CONF"
 # Non scaricare moduli o interrompere VM in esecuzione: applicare al prossimo boot.
 echo 'options kvm enable_virt_at_load=0' > /etc/modprobe.d/infra-vagrant-kvm.conf
 update-initramfs -u
-if ! modprobe vboxdrv; then
-  echo 'Driver non caricato: completare firma/MOK Secure Boot o controllare /var/log/vbox-setup.log.' >&2
-  exit 1
+if ! modprobe vboxdrv || [[ ! -c /dev/vboxdrv ]]; then
+  # Oracle fornisce vboxconfig per ricompilare/caricare i moduli e ricreare i
+  # device node quando il solo modprobe non è sufficiente dopo un aggiornamento.
+  if [[ -x /sbin/vboxconfig ]]; then
+    /sbin/vboxconfig
+  fi
 fi
+test -c /dev/vboxdrv || {
+  echo 'Driver non pronto: completare firma/MOK Secure Boot o controllare /var/log/vbox-setup.log.' >&2
+  exit 1
+}
 VBoxManage --version
 vagrant --version
+packer version
 echo 'Installazione completata. Riavviare, poi eseguire ./configure.host.sh --check.'
-echo 'Nessun Extension Pack necessario; nessuna modifica a firewall o reti fisiche.'
+echo 'Packer è pronto e Docker è accessibile; nessun Extension Pack necessario.'
+echo 'Nessuna modifica a firewall o reti fisiche.'

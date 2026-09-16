@@ -12,6 +12,12 @@ from scripts.lab_config import HOSTONLY_POOL, LINUX_BOXES, load_spec, node_netwo
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def manual_vagrantfile(lab: Path) -> Path:
+    """Restituisce la definizione basic adottata dal singolo laboratorio."""
+    renamed = lab / "Vagrantfile.start"
+    return renamed if renamed.is_file() else lab / "Vagrant.start"
+
+
 @pytest.mark.parametrize(
     "invalid",
     [
@@ -53,7 +59,9 @@ def test_all_labs_have_valid_topologies() -> None:
 
 
 def test_manual_start_files_do_not_run_provisioners() -> None:
-    paths = sorted(ROOT.glob("*/Vagrant.start"))
+    paths = [
+        manual_vagrantfile(path.parent) for path in sorted(ROOT.glob("*/lab.json"))
+    ]
     assert len(paths) == 13
     for path in paths:
         source = path.read_text()
@@ -63,15 +71,14 @@ def test_manual_start_files_do_not_run_provisioners() -> None:
 
 def test_all_vagrantfiles_disable_optional_vbguest_updates() -> None:
     guard = (
-        "config.vbguest.auto_update = false "
-        "if Vagrant.has_plugin?('vagrant-vbguest')"
+        "config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')"
     )
     labs = sorted(ROOT.glob("*/lab.json"))
     assert len(labs) == 13
     for lab in labs:
-        for name in ("Vagrantfile", "Vagrant.start"):
-            source = (lab.parent / name).read_text()
-            assert guard in source, f"{lab.parent.name}/{name}"
+        for definition in (lab.parent / "Vagrantfile", manual_vagrantfile(lab.parent)):
+            source = definition.read_text()
+            assert guard in source, definition
 
 
 def test_pbs_is_not_attached_to_ceph_network() -> None:
@@ -134,14 +141,17 @@ def test_vagrantfiles_do_not_hardcode_lab_addresses() -> None:
     """Indirizzi ripetuti a mano fanno divergere i due percorsi da lab.json."""
     for path in sorted(ROOT.glob("*/lab.json")):
         spec = load_spec(path.parent)
-        for name in ("Vagrantfile", "Vagrant.start"):
-            source = (path.parent / name).read_text()
+        for definition in (
+            path.parent / "Vagrantfile",
+            manual_vagrantfile(path.parent),
+        ):
+            source = definition.read_text()
             code = "\n".join(
                 line
                 for line in source.splitlines()
                 if not line.lstrip().startswith("#")
             )
-            where = f"{path.parent.name}/{name}"
+            where = str(definition.relative_to(ROOT))
             for network in spec.get("internal_networks", []):
                 assert network["prefix"] not in code, where
             assert f"192.168.{spec['subnet']}." not in code, where
@@ -181,7 +191,7 @@ def test_provisioners_receive_hosts_instead_of_a_fixed_list() -> None:
     for directory in sorted(ROOT.glob("*/scripts/provision/base.sh")):
         source = directory.read_text()
         assert "hosts=$" in source, directory
-        assert 'tr \';\' \'\\n\' <<< "$hosts"' in source, directory
+        assert "tr ';' '\\n' <<< \"$hosts\"" in source, directory
 
 
 def test_linux_lab_pins_one_box_per_node() -> None:
@@ -192,10 +202,11 @@ def test_linux_lab_pins_one_box_per_node() -> None:
     for node in spec["nodes"]:
         assert node["role"] == "linux"
         assert node["box_version"] == LINUX_BOXES[node["box"]]
-    for name in ("Vagrantfile", "Vagrant.start"):
-        source = (ROOT / "linux_4nodes" / name).read_text()
-        assert "node.fetch('box')" in source, name
-        assert "node.fetch('box_version')" in source, name
+    lab = ROOT / "linux_4nodes"
+    for definition in (lab / "Vagrantfile", manual_vagrantfile(lab)):
+        source = definition.read_text()
+        assert "node.fetch('box')" in source, definition
+        assert "node.fetch('box_version')" in source, definition
 
 
 @pytest.mark.parametrize("invalid", ["unknown_box", "wrong_box_version", "box_on_pve"])
@@ -226,9 +237,9 @@ def test_opnsense_lab_routes_segments_through_the_firewall() -> None:
     for node in spec["nodes"]:
         if node["role"] == "debian":
             assert len(node_networks(spec, node)) == 1, node["name"]
-    for name in ("Vagrantfile", "Vagrant.start"):
-        source = (lab / name).read_text()
-        assert "vm.ssh.shell = '/bin/sh'" in source, name
+    for definition in (lab / "Vagrantfile", manual_vagrantfile(lab)):
+        source = definition.read_text()
+        assert "vm.ssh.shell = '/bin/sh'" in source, definition
     provisioner = (lab / "scripts/provision/opnsense.sh").read_text()
     assert "opnsense-bootstrap.sh.in" in provisioner
     assert "<sudo_allow_wheel>2</sudo_allow_wheel>" in provisioner

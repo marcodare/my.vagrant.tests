@@ -25,14 +25,14 @@ host-only 56–71, così nessun futuro lab lo erediterà per default.
 ## Due percorsi di avvio
 
 ```bash
-./scripts/up.sh                                      # assistito
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh rocky10
+./scripts/up.sh                                          # assistito
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh rocky10
 ```
 
 Il `Vagrantfile` imposta hostname, `/etc/hosts`, l'IP sulla NIC del lab, NTP e
 alcuni strumenti di rete (`tcpdump`, `iperf3`, `traceroute`, `nc`, `dig`).
-`Vagrant.start` lascia la NIC del lab senza indirizzo: la configurazione è
+`Vagrantfile.start` lascia la NIC del lab senza indirizzo: la configurazione è
 l'esercizio descritto in [STEPS.md](STEPS.md). Usare la variabile anche per
 `status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
 

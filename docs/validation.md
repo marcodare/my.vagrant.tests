@@ -7,7 +7,7 @@ installare pacchetti host e senza avviare VM:
 | --- | --- |
 | Sintassi Bash di tutti gli script | OK |
 | ShellCheck di tutti gli script | OK |
-| Sintassi dei Vagrantfile e Vagrant.start | OK |
+| Sintassi dei Vagrantfile e delle definizioni basic (`Vagrant.start`/`Vagrantfile.start`) | OK |
 | `vagrant validate`, Vagrant 2.4.9, tredici laboratori e due percorsi | OK |
 | Topologie: IP, MAC, risorse, box/ruoli, file locali | OK |
 | Ruff, codice Python | OK |

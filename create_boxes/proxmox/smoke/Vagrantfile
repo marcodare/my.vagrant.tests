@@ -1,0 +1,15 @@
+# frozen_string_literal: true
+
+Vagrant.configure('2') do |config|
+  config.vm.box = ENV.fetch('PROXMOX_BOX_NAME', 'local/proxmox-ve-9.2')
+  config.vm.boot_timeout = 900
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+
+  config.vm.provider 'virtualbox' do |vb|
+    vb.name = 'proxmox-ve-box-smoke'
+    vb.memory = 4096
+    vb.cpus = 2
+    vb.gui = false
+    vb.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
+  end
+end

@@ -13,13 +13,19 @@ echo 'OK: sintassi Bash.'
 # mancare: senza questo guard l'intero script si fermava qui per via di set -e,
 # saltando silenziosamente tutti i controlli successivi.
 if command -v ruby >/dev/null; then
-  while IFS= read -r -d '' file; do ruby -c "$file" >/dev/null; done < <(find . \( -name '*.rb' -o -name Vagrantfile -o -name Vagrant.start \) -not -path '*/.vagrant/*' -not -path '*/.venv/*' -print0)
+  while IFS= read -r -d '' file; do ruby -c "$file" >/dev/null; done < <(find . \( -name '*.rb' -o -name Vagrantfile -o -name Vagrant.start -o -name Vagrantfile.start \) -not -path '*/.vagrant/*' -not -path '*/.venv/*' -print0)
   echo 'OK: sintassi Ruby dei Vagrantfile.'
 else
   skipped+=('ruby: sintassi Vagrantfile non verificata')
 fi
 
 python3 scripts/check_layout.py
+
+# I builder non fanno parte dei lab e non vengono eseguiti automaticamente.
+# Il loro validatore controlla soltanto template e sintassi, senza download o VM.
+if [[ -x create_boxes/proxmox/scripts/validate.sh ]]; then
+  create_boxes/proxmox/scripts/validate.sh
+fi
 
 # Il pacchetto shellcheck-py è nel dependency group dev, quindi sotto `uv run`
 # il binario è nel PATH del venv anche senza il pacchetto di sistema.
@@ -35,7 +41,10 @@ if command -v vagrant >/dev/null; then
     # È una verifica statica: non richiedere che il driver del provider sia
     # caricato sull'host che esegue lint o CI.
     (cd "$(dirname "$lab")" && vagrant validate --ignore-provider >/dev/null)
-    (cd "$(dirname "$lab")" && VAGRANT_VAGRANTFILE=Vagrant.start vagrant validate --ignore-provider >/dev/null)
+    lab_dir=$(dirname "$lab")
+    manual_file=Vagrant.start
+    [[ -f "$lab_dir/Vagrantfile.start" ]] && manual_file=Vagrantfile.start
+    (cd "$lab_dir" && VAGRANT_VAGRANTFILE="$manual_file" vagrant validate --ignore-provider >/dev/null)
   done
   echo 'OK: vagrant validate su entrambi i percorsi di ogni laboratorio.'
 else

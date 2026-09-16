@@ -1,45 +1,41 @@
 # frozen_string_literal: true
 # Variante didattica: crea esclusivamente VM, NIC e dischi.
 # Non configura hostname, indirizzi IP, pacchetti o servizi nel guest.
-# Avvio: VAGRANT_VAGRANTFILE=Vagrant.start vagrant up
+# Avvio: VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
 
 require 'json'
 
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
 Vagrant.configure('2') do |config|
-  # Il percorso basic non deve essere modificato da plugin opzionali dell'host.
-  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  # Un eventuale vagrant-vbguest installato sull'host non deve modificare le VM
+  # del percorso basic. Le Guest Additions incluse nelle box sono sufficienti:
+  # non ci sono shared folder e questo file deve creare solo VM, NIC e dischi.
   config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
 
-  config.vm.box = spec.fetch('box')
-  config.vm.box_version = spec.fetch('box_version')
+  # Box e versione sono per nodo: ogni macchina ha la propria distribuzione.
   config.vm.box_architecture = 'amd64'
   config.vm.synced_folder '.', '/vagrant', disabled: true
   config.vm.boot_timeout = 900
-
-  # L'appliance ZSvirt può richiedere credenziali preparate nella box locale.
-  if spec.fetch('nodes').any? { |node| node.fetch('role') == 'zsvirt' }
-    config.ssh.username = 'vagrant'
-    config.ssh.password = ENV['ZS_VAGRANT_PASSWORD']
-  end
 
   spec.fetch('nodes').each_with_index do |node, index|
     subnet = spec.fetch('subnet')
     mac_id = spec.fetch('mac_id', subnet)
     netmask = spec.fetch('netmask', '255.255.255.0')
     address = "192.168.#{subnet}.#{node.fetch('host')}"
-    management_mac = format('080027%02X%02X02', mac_id, index + 1)
+    lab_mac = format('080027%02X%02X02', mac_id, index + 1)
     networks = node.fetch('attach_internal', true) ? spec.fetch('internal_networks') : []
 
     config.vm.define node.fetch('name') do |vm|
+      vm.vm.box = node.fetch('box')
+      vm.vm.box_version = node.fetch('box_version')
+
       # NIC 1 resta NAT/DHCP per consentire vagrant ssh e il download pacchetti.
       # NIC 2 è host-only. L'IP indica a VirtualBox il segmento da creare, ma
       # auto_config=false impedisce a Vagrant di configurarlo dentro il guest.
       vm.vm.network 'private_network', ip: address, netmask: netmask, auto_config: false
 
-      # NIC 3 e successive appartengono alle reti interne del laboratorio.
-      # Anche queste restano senza IP finché non si seguono gli esercizi.
+      # Eventuali reti interne aggiunte in lab.json restano anch'esse senza IP.
       networks.each do |network|
         vm.vm.network 'private_network', ip: "#{network.fetch('prefix')}.#{node.fetch('host')}",
           auto_config: false,
@@ -50,10 +46,9 @@ Vagrant.configure('2') do |config|
         vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}-start"
         vb.memory = node.fetch('memory')
         vb.cpus = node.fetch('cpus')
-        vb.gui = node.fetch('role') == 'zsvirt'
-        vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
-        nested_roles = %w[pve kvm os-compute zsvirt]
-        vb.customize ['modifyvm', :id, '--nested-hw-virt', nested_roles.include?(node.fetch('role')) ? 'on' : 'off']
+        vb.gui = false
+        vb.customize ['modifyvm', :id, '--macaddress2', lab_mac]
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', 'off']
         vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
         networks.each_with_index do |_network, position|
           slot = position + 3
@@ -64,8 +59,7 @@ Vagrant.configure('2') do |config|
       end
 
       # Vagrant crea i supporti, ma non partiziona né formatta i dischi dati.
-      primary_size = node.fetch('role') == 'zsvirt' ? 200 : 80
-      vm.vm.disk :disk, size: "#{primary_size}GB", primary: true
+      vm.vm.disk :disk, size: '80GB', primary: true
       if node['disk_gb']
         vm.vm.disk :disk, size: "#{node.fetch('disk_gb')}GB",
           name: "#{node.fetch('name')}-data"

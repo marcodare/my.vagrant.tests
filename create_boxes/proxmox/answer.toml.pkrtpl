@@ -1,0 +1,22 @@
+[global]
+keyboard = "it"
+country = "it"
+fqdn = "proxmox-template.lab.test"
+mailto = "root@lab.test"
+timezone = "Europe/Rome"
+root-password-hashed = "${ROOT_PASSWORD_HASH}"
+reboot-on-error = false
+
+[network]
+source = "from-dhcp"
+
+[disk-setup]
+filesystem = "ext4"
+disk-list = ["sda"]
+
+[disk-setup.lvm]
+hdsize = 80
+swapsize = 4
+maxroot = 24
+maxvz = 40
+minfree = 4

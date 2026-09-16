@@ -1,14 +1,14 @@
 # proxmox_3nodes_simple
 
-Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Per studiare tutto a mano usare `Vagrantfile.start` e seguire [STEPS.md](STEPS.md).
 Il `Vagrantfile` mantiene il percorso assistito già disponibile.
 
 ## Due percorsi di avvio
 
 ```bash
-./scripts/up.sh                                      # assistito
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh pve1
+./scripts/up.sh                                          # assistito
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
 ```
 
 Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
@@ -51,7 +51,7 @@ Ripetere `sudo passwd root` anche su pve2/pve3 e, se presente, pbs1. Accedere
 alle UI con root e realm Linux PAM. Nessuna password è inclusa nel repository.
 
 Lo script avvia Debian e installa il kernel PVE, esegue reload, poi completa
-l'installazione di Proxmox. Leggere il [runbook locale](docs/proxmox.md) per
+l'installazione di Proxmox. Leggere il [runbook comune](../docs/proxmox.md) per
 verifica KVM, creazione del cluster, join, prima VM e migrazione.
 In quel runbook sostituire `S` con **56**.
 

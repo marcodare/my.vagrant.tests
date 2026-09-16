@@ -130,7 +130,7 @@ Ogni cartella è un'unità condivisibile e contiene quattro ingressi obbligatori
 | File | Responsabilità |
 | --- | --- |
 | `Vagrantfile` | Percorso assistito con provisioning locale |
-| `Vagrant.start` | Solo VM, NIC e dischi; nessun provisioning del guest |
+| `Vagrant.start` (oppure `Vagrantfile.start`) | Solo VM, NIC e dischi; nessun provisioning del guest |
 | `README.md` | Scopo, topologia, versioni, avvio/arresto e limiti |
 | `STEPS.md` | Installazione manuale completa da OS pulito, anche fuori da Vagrant |
 

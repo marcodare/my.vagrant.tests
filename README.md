@@ -58,11 +58,16 @@ per altri progetti non vengono toccate, e un repository APT già configurato
 sull'host viene rispettato invece di essere duplicato.
 
 Lo script host configura APT Oracle/HashiCorp con `signed-by`, installa
-VirtualBox 7.2, Vagrant, driver/header e strumenti di verifica, aggiunge l'utente
-a `vboxusers` e imposta `kvm.enable_virt_at_load=0` via modprobe per il prossimo
-boot. Non interrompe eventuali VM KVM. Secure Boot può richiedere il completamento
-della firma/MOK del driver: vedere [troubleshooting](docs/troubleshooting.md).
-L'Extension Pack non è necessario. Nessun plugin Vagrant aggiuntivo richiesto.
+VirtualBox 7.2, Vagrant, Packer, driver/header e strumenti di verifica e
+creazione delle box. Docker Engine è un prerequisito esterno: lo script non lo
+installa né lo configura, ma verifica che sia accessibile e ne stampa la
+versione. Aggiunge l'utente a `vboxusers` e imposta
+`kvm.enable_virt_at_load=0` via modprobe per il prossimo boot. Non interrompe
+eventuali VM KVM. Secure Boot può
+richiedere il completamento della firma/MOK del driver: vedere
+[troubleshooting](docs/troubleshooting.md). L'Extension Pack non è necessario.
+Nessun plugin Vagrant aggiuntivo richiesto; Packer scarica i propri plugin al
+primo utilizzo del relativo builder.
 
 ## Operazioni quotidiane
 
@@ -70,6 +75,8 @@ Ogni laboratorio offre due punti di partenza:
 
 - `Vagrantfile`: percorso assistito esistente, con provisioning dichiarato dal lab;
 - `Vagrant.start`: crea solo VM, NIC e dischi; `STEPS.md` guida la configurazione manuale.
+  I laboratori `linux_4nodes` e `proxmox_3nodes_simple` usano il nome
+  equivalente `Vagrantfile.start`.
 
 Per il percorso didattico:
 
@@ -82,8 +89,9 @@ VAGRANT_VAGRANTFILE=Vagrant.start vagrant halt
 La variabile deve essere presente in ogni comando. Non alternare i due file
 sulle stesse VM: per cambiare percorso, salvare gli appunti e distruggere
 esplicitamente l'istanza del lab con lo stesso `VAGRANT_VAGRANTFILE` usato per
-crearla. `Vagrant.start` lascia senza IP le NIC del lab; la NIC NAT resta
-configurata dalla box per SSH e download.
+crearla. Nei lab `linux_4nodes` e `proxmox_3nodes_simple` sostituire
+`Vagrant.start` con `Vagrantfile.start`. Il file basic lascia senza IP le NIC
+del lab; la NIC NAT resta configurata dalla box per SSH e download.
 
 Eseguire dalla cartella del laboratorio:
 
@@ -115,9 +123,10 @@ AGENTS.md / CLAUDE.md       istruzioni condivise per Codex e Claude Code
 configure.host.sh          preparazione dell'host Ubuntu
 docs/                      architettura e runbook comuni
 scripts/                   validazione statica
+create_boxes/              builder riproducibili per box locali
 <laboratorio>/
   Vagrantfile / lab.json     percorso assistito, topologia e risorse
-  Vagrant.start / STEPS.md   VM grezze e percorso di configurazione manuale
+  Vagrant.start / STEPS.md   VM grezze e percorso manuale (alcuni lab usano Vagrantfile.start)
   scripts/up.sh            avvio iniziale
   scripts/provision/       provisioning Bash locale al laboratorio
   README.md                accesso ed esercizi specifici

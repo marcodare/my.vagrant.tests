@@ -1,0 +1,5 @@
+cache/
+output/
+work/
+packer_cache/
+*.auto.iso

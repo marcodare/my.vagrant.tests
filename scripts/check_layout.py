@@ -37,7 +37,12 @@ def main() -> None:
         assisted = path.parent / "Vagrantfile"
         readme = path.parent / "README.md"
         steps = path.parent / "STEPS.md"
-        manual = path.parent / "Vagrant.start"
+        manual_name = (
+            "Vagrantfile.start"
+            if (path.parent / "Vagrantfile.start").is_file()
+            else "Vagrant.start"
+        )
+        manual = path.parent / manual_name
         if not assisted.is_file():
             raise ValueError(f"Vagrantfile mancante: {path}")
         if not readme.is_file():
@@ -45,7 +50,7 @@ def main() -> None:
         if not steps.is_file():
             raise ValueError(f"STEPS mancante: {path}")
         if not manual.is_file():
-            raise ValueError(f"Vagrant.start mancante: {path}")
+            raise ValueError(f"Definizione Vagrant basic mancante: {path}")
         vbguest_guard = (
             "config.vbguest.auto_update = false "
             "if Vagrant.has_plugin?('vagrant-vbguest')"
@@ -59,15 +64,15 @@ def main() -> None:
                 )
         readme_text = readme.read_text(encoding="utf-8")
         if (
-            "VAGRANT_VAGRANTFILE=Vagrant.start vagrant up" not in readme_text
+            f"VAGRANT_VAGRANTFILE={manual_name} vagrant up" not in readme_text
             or "STEPS.md" not in readme_text
         ):
             raise ValueError(f"README senza percorso basic o STEPS: {path}")
         steps_text = steps.read_text(encoding="utf-8").lower()
-        if "bare metal" not in steps_text or "vagrant.start" not in steps_text:
+        if "bare metal" not in steps_text or manual_name.lower() not in steps_text:
             raise ValueError(f"STEPS non portabile o senza percorso basic: {path}")
         if ".provision" in manual_text or "auto_config: false" not in manual_text:
-            raise ValueError(f"Vagrant.start configura il guest: {path}")
+            raise ValueError(f"La definizione Vagrant basic configura il guest: {path}")
         for index, node in enumerate(spec["nodes"], start=1):
             # zsvirt è un'appliance senza provisioner; OPNsense ha solo il
             # proprio, perché base.sh dei lab è pensato per guest Linux.
