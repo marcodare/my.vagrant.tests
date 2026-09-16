@@ -75,8 +75,8 @@ Ogni laboratorio offre due punti di partenza:
 
 - `Vagrantfile`: percorso assistito esistente, con provisioning dichiarato dal lab;
 - `Vagrant.start`: crea solo VM, NIC e dischi; `STEPS.md` guida la configurazione manuale.
-  I laboratori `linux_4nodes` e `proxmox_3nodes_simple` usano il nome
-  equivalente `Vagrantfile.start`.
+  `linux_4nodes` e tutti i laboratori Proxmox usano il nome equivalente
+  `Vagrantfile.start`.
 
 Per il percorso didattico:
 
@@ -89,8 +89,8 @@ VAGRANT_VAGRANTFILE=Vagrant.start vagrant halt
 La variabile deve essere presente in ogni comando. Non alternare i due file
 sulle stesse VM: per cambiare percorso, salvare gli appunti e distruggere
 esplicitamente l'istanza del lab con lo stesso `VAGRANT_VAGRANTFILE` usato per
-crearla. Nei lab `linux_4nodes` e `proxmox_3nodes_simple` sostituire
-`Vagrant.start` con `Vagrantfile.start`. Il file basic lascia senza IP le NIC
+crearla. Nei lab `linux_4nodes` e Proxmox sostituire `Vagrant.start` con
+`Vagrantfile.start`. Il file basic lascia senza IP le NIC
 del lab; la NIC NAT resta configurata dalla box per SSH e download.
 
 Eseguire dalla cartella del laboratorio:
@@ -126,7 +126,7 @@ scripts/                   validazione statica
 create_boxes/              builder riproducibili per box locali
 <laboratorio>/
   Vagrantfile / lab.json     percorso assistito, topologia e risorse
-  Vagrant.start / STEPS.md   VM grezze e percorso manuale (alcuni lab usano Vagrantfile.start)
+  Vagrant.start / STEPS.md   VM non configurate e percorso manuale (alcuni lab usano Vagrantfile.start)
   scripts/up.sh            avvio iniziale
   scripts/provision/       provisioning Bash locale al laboratorio
   README.md                accesso ed esercizi specifici
@@ -145,7 +145,10 @@ snapshot e ISO nell'uso dell'SSD.
 - OPNsense 26.1 viene installato sulla box FreeBSD con `opnsense-bootstrap`, lo
   strumento ufficiale del progetto: non esiste una box OPNsense ufficiale.
 - ZSvirt richiede una box locale preparata dall’OVA ufficiale: non viene scaricata automaticamente.
-- Proxmox VE 9.2 / PBS 4.2 dai repository no-subscription, CloudStack dal ramo 4.23.
+- Proxmox VE 9.2 dalla box locale costruita con l'ISO ufficiale, usata sia dal
+  percorso assistito sia da quello manuale; PBS 4.2 dal repository
+  no-subscription e CloudStack dal ramo 4.23. Gli STEPS PVE conservano anche le
+  indicazioni adattabili a installazioni Debian 13 generiche o bare metal.
 - OPNsense: interfacce, utente Vagrant e poche regole iniziali; il resto è esercizio.
 - VM, NIC, bridge, sincronizzazione oraria e pacchetti base.
 - CloudStack semplice: database, manager, agent, NFS e reti fake public/private.

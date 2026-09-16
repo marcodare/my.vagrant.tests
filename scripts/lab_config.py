@@ -22,7 +22,7 @@ SUBNET_MIN = min(int(net.network_address.packed[2]) for net in HOSTONLY_POOL)
 SUBNET_MAX = max(int(net.broadcast_address.packed[2]) for net in HOSTONLY_POOL)
 
 ROLE_BOXES = {
-    "pve": "bento/debian-13",
+    "pve": "local/proxmox-ve-9.2",
     "pbs": "bento/debian-13",
     "manager": "bento/ubuntu-22.04",
     "ha-manager": "bento/ubuntu-22.04",

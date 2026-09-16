@@ -1,11 +1,15 @@
 # Percorso manuale: Proxmox VE semplice
 
-Questa procedura parte da tre VM Debian 13 pulite e costruisce manualmente un
-cluster Proxmox VE 9.2. `Vagrantfile.start` crea soltanto hardware virtuale,
-NIC e dischi: non configura il sistema operativo e non crea il cluster.
+Con Vagrant questa procedura parte da tre cloni non configurati della box
+`local/proxmox-ve-9.2`: PVE 9.2 e il kernel sono già installati, mentre identità,
+rete e cluster restano esercizi manuali. `Vagrantfile.start` crea soltanto VM,
+NIC e dischi e non esegue provisioner nel guest.
 
-Lo scopo è capire l'ordine delle dipendenze: prima identità e rete, poi kernel e
-pacchetti Proxmox, infine cluster, quorum e VM annidate. Creare automaticamente
+Su VM generiche o bare metal si può invece partire da Debian 13 pulita: in quel
+caso seguire anche le sezioni 6, 7 e 9 dedicate all'installazione di PVE.
+
+Lo scopo è capire l'ordine delle dipendenze: prima identità PVE e rete, poi
+verifiche del kernel e dello storage, infine cluster, quorum e VM annidate. Creare automaticamente
 il cluster toglierebbe proprio la parte più importante dell'esercizio.
 
 ## Risultato atteso
@@ -22,7 +26,7 @@ Ogni nodo avrà:
 - NIC 2 host-only collegata a `vmbr0`, senza gateway;
 - hostname e risoluzione locale coerenti;
 - kernel PVE con `/dev/kvm` disponibile tramite virtualizzazione annidata;
-- Proxmox VE 9.2 dal repository `pve-no-subscription`;
+- Proxmox VE 9.2 proveniente dalla box locale oppure installato da Debian;
 - appartenenza al cluster `study`, creato solo dopo la verifica dei singoli nodi.
 
 Management, Corosync, migrazione e traffico delle VM condividono `vmbr0`. È una
@@ -40,12 +44,13 @@ progettazione più rigorosa e, quando possibile, reti dedicate.
   sostituisce la configurazione locale in `/etc/pve`.
 - Non usare `pvecm expected` per mascherare una perdita di quorum.
 
-Fuori da Vagrant servono tre Debian 13 amd64 puliti, con virtualizzazione
+Fuori da Vagrant servono tre installazioni PVE 9.2 standalone oppure tre Debian
+13 amd64 pulite da convertire con le sezioni dedicate, con virtualizzazione
 hardware esposta, almeno le risorse indicate sopra, una NIC comune per il
-management e una route separata verso i repository. Su bare metal adattare IP,
-MAC, nomi NIC e gateway, mantenendo invariati i principi della procedura.
+management e una route verso i repository. Su bare metal adattare IP, MAC,
+nomi NIC e gateway, mantenendo invariati i principi della procedura.
 
-## 1. Creare le tre VM grezze
+## 1. Creare i tre cloni PVE non configurati
 
 Dalla cartella `proxmox_3nodes_simple`:
 
@@ -83,7 +88,18 @@ lsblk
 df -hT
 ```
 
-La NIC NAT dovrebbe avere un indirizzo DHCP e fornire l'unica default route. La
+Con `Vagrantfile.start`, verificare inoltre:
+
+```bash
+pveversion
+uname -r
+hostname -s
+sudo test ! -e /etc/pve/corosync.conf
+```
+
+PVE deve essere nel ramo 9.2, il kernel deve terminare in `-pve`, l'hostname
+iniziale deve essere `proxmox-template` e il nodo non deve appartenere a un
+cluster. La NIC NAT dovrebbe avere un indirizzo DHCP e fornire l'unica default route. La
 seconda NIC dovrebbe essere presente ma senza IPv4 perché nel file Vagrant è
 impostato `auto_config: false`.
 
@@ -104,17 +120,14 @@ Il disco virtuale è impostato a 80 GB, ma `lsblk` e `df` possono mostrare un
 filesystem più piccolo. L'aumento del supporto VDI non implica automaticamente
 l'espansione della partizione o del filesystem.
 
-## 3. Configurare identità e risoluzione locale
+## 3. Finalizzare manualmente l'identità PVE
 
-Su ciascun nodo impostare il proprio hostname. Su `pve1`:
+Ogni clone contiene ancora il database `pmxcfs`, la CA e i certificati del
+template. Cambiare soltanto `/etc/hostname` produrrebbe tre nodi incoerenti.
+Prima di creare cluster o VM, operare su **un nodo alla volta**.
 
-```bash
-sudo hostnamectl set-hostname pve1
-hostnamectl --static
-```
-
-Usare `pve2` e `pve3` sugli altri nodi. In `/etc/hosts` rimuovere eventuali
-associazioni del nome corrente a un indirizzo `127.x.x.x`, quindi aggiungere:
+In `/etc/hosts` rimuovere le righe riferite a `proxmox-template`, quindi
+aggiungere su tutti i nodi:
 
 ```text
 # BEGIN INFRA LAB
@@ -126,12 +139,44 @@ associazioni del nome corrente a un indirizzo `127.x.x.x`, quindi aggiungere:
 
 Proxmox usa intensamente hostname e risoluzione dei nomi. Il nome del nodo deve
 risolversi nell'IP management stabile, non nel loopback né nell'indirizzo DHCP
-della NAT. Verificare su ogni nodo:
+della NAT.
+
+Solo sui cloni della box locale, verificare prima che non esistano cluster o
+guest e rigenerare l'identità. L'esempio è per `pve1`; sostituire `NODE` sugli
+altri due nodi:
+
+```bash
+NODE=pve1
+sudo test ! -e /etc/pve/corosync.conf
+sudo find /etc/pve/nodes -type f \
+  \( -path '*/qemu-server/*.conf' -o -path '*/lxc/*.conf' \) -print
+# L'ultimo comando non deve stampare nulla.
+
+sudo systemctl stop pve-ha-lrm pve-ha-crm pvescheduler \
+  pvestatd pveproxy pvedaemon
+sudo systemctl stop pve-cluster
+if mountpoint -q /etc/pve; then echo '/etc/pve ancora montato'; exit 1; fi
+sudo rm -f /var/lib/pve-cluster/config.db /var/lib/pve-cluster/config.db-*
+sudo hostnamectl set-hostname "$NODE"
+sudo systemctl start pve-cluster
+sudo pvecm updatecerts --force
+sudo systemctl start pvedaemon pveproxy pvestatd pvescheduler \
+  pve-ha-crm pve-ha-lrm
+```
+
+La cancellazione di `config.db` è ammessa qui soltanto perché il clone è
+standalone e privo di guest. Non eseguirla mai su un nodo configurato. Su una
+Debian pulita, che non possiede ancora `pmxcfs`, impostare soltanto l'hostname
+con `hostnamectl` e continuare con l'installazione.
+
+Verificare su ogni nodo:
 
 ```bash
 hostname --fqdn
 getent hosts pve1 pve2 pve3
 getent hosts "$(hostname --short)"
+sudo test -d "/etc/pve/nodes/$(hostname --short)"
+sudo test ! -e /etc/pve/nodes/proxmox-template
 ```
 
 L'ultima riga deve restituire l'indirizzo `192.168.56.x` del nodo corrente.
@@ -230,9 +275,11 @@ chronyc tracking
 Il ping verso gli altri nodi funzionerà solo dopo aver configurato anche loro.
 Devono esserci `192.168.56.x/24` su `vmbr0` e una sola default route sulla NAT.
 
-## 6. Aggiungere il repository Proxmox VE 9.2
+## 6. Aggiungere il repository Proxmox VE 9.2 (solo Debian pulita)
 
-Eseguire su tutti e tre i nodi. Scaricare il keyring dedicato a Debian Trixie:
+Con i cloni della box locale saltare questa sezione: repository e PVE sono già
+presenti. Su Debian pulita eseguire quanto segue su tutti e tre i nodi.
+Scaricare il keyring dedicato a Debian Trixie:
 
 ```bash
 sudo curl -fsSL \
@@ -285,9 +332,10 @@ apt-cache policy proxmox-ve pve-manager proxmox-default-kernel
 Il pin riguarda i metapacchetti principali e consente le patch `9.2.x`; non
 rende l'intero sistema una build bit-per-bit.
 
-## 7. Installare e avviare il kernel PVE
+## 7. Installare e avviare il kernel PVE (solo Debian pulita)
 
-Su ciascun nodo:
+Con la box locale il kernel PVE è già installato; passare alla sezione 8. Su
+Debian pulita, eseguire su ciascun nodo:
 
 ```bash
 sudo apt-get install -y proxmox-default-kernel
@@ -322,9 +370,9 @@ avviare a sua volta VM accelerate. Se manca, non proseguire dando per operativo
 il nodo: controllare SVM nel firmware, impostazione `nested-hw-virt` della VM e
 conflitti fra VirtualBox e KVM sull'host.
 
-## 9. Installare Proxmox VE
+## 9. Installare Proxmox VE o ripristinare gli storage locali
 
-Preconfigurare Postfix per uso locale ed evitare richieste interattive:
+Su Debian pulita, preconfigurare Postfix per uso locale ed evitare richieste interattive:
 
 ```bash
 echo 'postfix postfix/main_mailer_type select Local only' | \
@@ -349,23 +397,32 @@ systemctl status pveproxy pvedaemon pvestatd --no-pager
 ss -ltnp | grep ':8006'
 ```
 
-Un'installazione sopra Debian non crea il layout LVM dell'ISO Proxmox. Controllare
-lo storage:
+Con la box locale non reinstallare i pacchetti. Il reset dell'identità ha creato
+un nuovo database `pmxcfs`, quindi registrare nuovamente gli storage realizzati
+dall'installer ISO. In entrambi i percorsi controllare prima lo stato:
 
 ```bash
 sudo pvesm status
 df -h /var/lib/vz
 ```
 
-Se non esiste uno storage chiamato `local`, aggiungerlo esplicitamente:
+Se non esiste `local`, aggiungerlo esplicitamente:
 
 ```bash
 sudo pvesm add dir local --path /var/lib/vz \
-  --content iso,vztmpl,backup,images,rootdir
+  --content iso,vztmpl,backup
 ```
 
-Questo storage risiede sul disco OS del singolo nodo: non è condiviso e non è
-ridondato.
+Con la box ISO verificare anche `sudo lvs pve/data` e, se il volume esiste ma
+`local-lvm` manca, registrarlo:
+
+```bash
+sudo pvesm add lvmthin local-lvm --vgname pve --thinpool data \
+  --content images,rootdir
+```
+
+Entrambi gli storage risiedono sul disco OS del singolo nodo: non sono condivisi
+né ridondati.
 
 ## 10. Impostare l'accesso amministrativo e verificare la UI
 

@@ -86,6 +86,26 @@ def test_pbs_is_not_attached_to_ceph_network() -> None:
     assert len(spec["internal_networks"]) == 1
     pbs = next(node for node in spec["nodes"] if node["role"] == "pbs")
     assert pbs["attach_internal"] is False
+    assert pbs["box"] == "bento/debian-13"
+
+
+def test_proxmox_labs_use_local_box_for_all_pve_paths() -> None:
+    """Entrambi i percorsi PVE clonano la box locale già installata."""
+    for directory in sorted(ROOT.glob("proxmox_3nodes*/lab.json")):
+        spec = load_spec(directory.parent)
+        assert spec["box"] == "local/proxmox-ve-9.2"
+        assert spec["box_version"] == "0"
+        manual = manual_vagrantfile(directory.parent).read_text()
+        assert "node.fetch('box', spec.fetch('box'))" in manual
+        assert "node.fetch('box_version', spec.fetch('box_version'))" in manual
+        assisted = (directory.parent / "Vagrantfile").read_text()
+        assert "node.fetch('box', spec.fetch('box'))" in assisted
+        assert "scripts/provision/finalize-pve.sh" in assisted
+        assert "vm.vm.hostname" not in assisted
+        finalizer = (directory.parent / "scripts/provision/finalize-pve.sh").read_text()
+        assert "[[ ! -e /etc/pve/corosync.conf ]]" in finalizer
+        assert "qemu-server/*.conf" in finalizer
+        assert "lxc/*.conf" in finalizer
 
 
 @pytest.mark.parametrize(

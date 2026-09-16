@@ -190,27 +190,29 @@ Verifiche minime attese:
 - nessuna appartenenza a un cluster;
 - UI PVE e servizi principali attivi.
 
-## Identità Proxmox: limite prima dell'uso nei lab
+## Identità Proxmox nei laboratori
 
 L'installer crea il nodo `proxmox-template.lab.test` e inizializza `pmxcfs`,
 certificati PVE e directory `/etc/pve/nodes/proxmox-template`. La pulizia della
 box rigenera in sicurezza `machine-id` e chiavi host SSH, ma non rinomina
 automaticamente lo stato Proxmox.
 
-Per questo motivo **non usare ancora tre cloni della box per formare un
-cluster**. Quando verranno aggiornati i Vagrantfile dei lab servirà una fase di
-finalizzazione, prima del join, che:
+I Vagrantfile assistiti dei laboratori Proxmox eseguono
+`scripts/provision/finalize-pve.sh` prima di qualsiasi join. La finalizzazione:
 
 1. assegni hostname e `/etc/hosts` definitivi prima dell'avvio operativo dei
    servizi PVE;
 2. converta lo stato standalone dal nome template al nome del nodo;
 3. rigeneri certificati PVE e verifichi `/etc/pve/nodes/<nome>`;
 4. configuri NIC NAT e bridge management del singolo laboratorio;
-5. dimostri con un test reale che i tre nodi hanno identità e certificati
-   distinti prima di eseguire `pvecm create` o `pvecm add`.
+5. verifica che i tre nodi abbiano identità distinte prima di consentire gli
+   esercizi `pvecm create` e `pvecm add`.
 
 Questa separazione è intenzionale: il builder produce l'artefatto di base;
-l'integrazione nei laboratori verrà fatta e verificata nel passo successivo.
+i laboratori producono le identità finali. Il provisioner rifiuta di azzerare
+`pmxcfs` se trova un cluster, una VM o un container preesistente. Anche il
+percorso manuale `Vagrantfile.start` clona la box, ma non esegue
+il provisioner: la stessa finalizzazione viene svolta a mano seguendo STEPS.md.
 
 ## Layout e file generati
 

@@ -22,15 +22,13 @@ end.join(';')
 # '2' è la versione del formato di configurazione, non di VirtualBox.
 # do |config| ... end è un blocco Ruby: config raccoglie le opzioni comuni.
 Vagrant.configure('2') do |config|
-  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
-  # Evita che il plugin opzionale vagrant-vbguest modifichi il guest prima dei provisioner.
+  # Le shared folder non servono; la box PVE non include le Guest Additions.
+  # Evita che vagrant-vbguest tenti di installarle nel nodo hypervisor.
   config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
 
 
   # La box è l’immagine base del sistema operativo; versione e architettura
   # selezionano la variante da scaricare. amd64 è adatta al Bosgame Ryzen.
-  config.vm.box = spec.fetch('box')
-  config.vm.box_version = spec.fetch('box_version')
   config.vm.box_architecture = 'amd64'
 
   # Disabilita il mount automatico della cartella host dentro /vagrant.
@@ -69,9 +67,10 @@ Vagrant.configure('2') do |config|
 
     # 4. CONFIGURAZIONE DEL SINGOLO NODO
     # define assegna il nome usato da comandi come vagrant ssh pve1.
-    # vm.vm.hostname imposta invece il nome del sistema operativo guest.
+    # Il provisioner imposta il nome guest dopo aver resettato l'identità PVE.
     config.vm.define node.fetch('name') do |vm|
-      vm.vm.hostname = node.fetch('name')
+      vm.vm.box = node.fetch('box', spec.fetch('box'))
+      vm.vm.box_version = node.fetch('box_version', spec.fetch('box_version'))
 
       # NIC 1: NAT tecnica gestita da Vagrant per SSH e download.
       # NIC 2: rete host-only, raggiungibile dall’host e dalle VM del segmento.
@@ -138,12 +137,15 @@ Vagrant.configure('2') do |config|
       # Prepara hostname, pacchetti comuni e reti; lo script successivo installa
       # il ruolo indicato in lab.json (pve, pbs, manager oppure kvm).
       # I percorsi sono locali a questo laboratorio, senza import condivisi.
+      if node.fetch('role') == 'pve'
+        vm.vm.provision 'shell', path: 'scripts/provision/finalize-pve.sh',
+          args: [node.fetch('name'), address, lab_hosts]
+      end
       vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
         args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s, lab_hosts]
 
       # Il provisioning parte al primo up, oppure con vagrant provision/--provision.
-      # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per
-      # avviare il kernel PVE prima di completare l’installazione dello stack.
+      # Per PVE, scripts/up.sh esegue un reload per applicare la nuova rete.
       # Cluster, pool e altre operazioni didattiche sono spiegati nel README.
       # Versione software richiesta dal lab.json, distinta dalla versione della box.
       vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",

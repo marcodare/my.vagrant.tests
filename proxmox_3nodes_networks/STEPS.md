@@ -1,29 +1,127 @@
 # Percorso manuale: Proxmox e reti
 
-## Uso su Vagrant, VM generiche o bare metal
+`Vagrantfile.start` crea tre cloni della box `local/proxmox-ve-9.2`, collega le
+NIC e non esegue provisioner nel guest. PVE e il kernel sono già installati,
+ma hostname, identità `pmxcfs`, bridge, cluster e servizi di lab restano da
+configurare a mano.
 
-Fuori da Vagrant preparare tre Debian 13 amd64 puliti con AMD-V/Intel VT
-disponibile e tre NIC per nodo: management, migrazione e guest/VLAN. Gli IP del
-lab sono esempi sostituibili; mantenere reti separate, hostname/DNS coerenti,
-NTP e accesso console durante i cambi di rete. La NIC NAT citata sotto equivale
-all'uplink di servizio scelto nell'ambiente reale.
+Su VM generiche o bare metal partire da tre installazioni PVE 9.2 standalone.
+Se si parte da Debian 13 pulita, installare prima PVE seguendo la procedura
+ufficiale indicata in [docs/proxmox.md](docs/proxmox.md). Adattare IP, MAC, nomi
+delle NIC e gateway; mantenere accesso console, DNS e NTP funzionanti.
 
-1. Avviare con `VAGRANT_VAGRANTFILE=Vagrant.start vagrant up`. Configurare
-   hostname, `/etc/hosts`, NTP e Proxmox VE 9.2 come descritto nel percorso
-   base di [docs/proxmox.md](docs/proxmox.md).
-2. Associare le NIC tramite MAC, senza dipendere dal nome assegnato dal kernel.
-   Creare `vmbr0` su `192.168.57.11-.13/24`, `vmbr1` su
-   `10.57.1.11-.13/24` per migrazione e `vmbr2` su `10.57.2.11-.13/24` per
-   guest/VLAN. Non impostare gateway su questi bridge; la NAT resta tecnica e
-   configurata con DHCP. Prima di sostituire `systemd-networkd`, installare
-   `ifupdown2` insieme a `isc-dhcp-client`, che su Debian 13 è solo suggerito:
-   verificare `command -v dhclient` prima del riavvio e poi indirizzo NAT,
-   default route e risoluzione DNS.
-3. Rendere `vmbr2` VLAN-aware, creare VLAN e VM di prova, quindi verificare
-   isolamento, tagging e MTU con ping e cattura pacchetti.
-4. Creare il cluster PVE su vmbr0. Nelle Datacenter Options selezionare la rete
-   `10.57.1.0/24` come migration network, poi misurare che la migrazione usi
-   vmbr1. Simulare perdita di una NIC/rete e osservare gli effetti.
+## 1. Avvio e inventario
 
-Prima di usare il Vagrantfile automatico eliminare esplicitamente le VM create
-con `Vagrant.start`; i due percorsi non condividono una configurazione guest.
+```bash
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant status
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
+```
+
+Usare la variabile per ogni comando del percorso manuale. Su ciascun nodo:
+
+```bash
+pveversion
+uname -r
+hostname -s
+sudo test ! -e /etc/pve/corosync.conf
+sudo find /etc/pve/nodes -type f \
+  \( -path '*/qemu-server/*.conf' -o -path '*/lxc/*.conf' \) -print
+ip -br link
+ip route
+lsblk
+```
+
+Con la box locale sono attesi hostname `proxmox-template`, kernel `-pve`,
+assenza di Corosync e nessuna configurazione guest. Identificare sempre le NIC
+tramite i MAC dichiarati in `lab.json`, non tramite nomi come `enp0s8`.
+
+## 2. Finalizzare l'identità dei cloni
+
+Prima di creare rete o cluster, rimuovere da `/etc/hosts` l'eventuale riga del
+template e aggiungere su tutti i nodi:
+
+```text
+192.168.57.11 pve1.lab.test pve1
+192.168.57.12 pve2.lab.test pve2
+192.168.57.13 pve3.lab.test pve3
+```
+
+Poi, un nodo alla volta, impostare `NODE=pve1`, `pve2` o `pve3` ed eseguire:
+
+```bash
+NODE=pve1  # usare pve2 e pve3 sugli altri nodi
+sudo test ! -e /etc/pve/corosync.conf
+sudo systemctl stop pve-ha-lrm pve-ha-crm pvescheduler \
+  pvestatd pveproxy pvedaemon
+sudo systemctl stop pve-cluster
+if mountpoint -q /etc/pve; then echo '/etc/pve ancora montato'; exit 1; fi
+sudo rm -f /var/lib/pve-cluster/config.db /var/lib/pve-cluster/config.db-*
+sudo hostnamectl set-hostname "$NODE"
+sudo systemctl start pve-cluster
+sudo pvecm updatecerts --force
+sudo systemctl start pvedaemon pveproxy pvestatd pvescheduler \
+  pve-ha-crm pve-ha-lrm
+sudo test -d "/etc/pve/nodes/$NODE"
+sudo test ! -e /etc/pve/nodes/proxmox-template
+```
+
+Azzerare `config.db` è sicuro soltanto su questi cloni standalone vuoti. Non
+farlo mai su un nodo già configurato, con guest o appartenente a un cluster.
+Su un'installazione PVE generica già correttamente nominata non serve.
+
+## 3. Costruire le reti
+
+Installare `ifupdown2`, `isc-dhcp-client` e `chrony`. Conservare la prima NIC
+NAT in DHCP: serve a Vagrant per SSH e al guest per repository, DNS e NTP.
+Creare poi, senza gateway:
+
+| Bridge | Rete | Uso |
+| --- | --- | --- |
+| `vmbr0` | `192.168.57.11-.13/24` | management e Corosync |
+| `vmbr1` | `10.57.1.11-.13/24` | migrazione |
+| `vmbr2` | `10.57.2.11-.13/24` | traffico guest/VLAN |
+
+Associare ogni bridge alla NIC corretta tramite MAC. Rendere `vmbr2`
+VLAN-aware; non aggiungere default route ai bridge. Applicare un nodo alla
+volta con accesso console disponibile, quindi verificare:
+
+```bash
+command -v dhclient
+sudo ifreload -a
+ip -br address
+ip route
+getent hosts pve1 pve2 pve3
+chronyc tracking
+```
+
+## 4. Cluster e verifiche
+
+Creare `study` su `pve1` usando `vmbr0`, quindi aggiungere `pve2` e `pve3`.
+Prima del join i nodi aggiunti devono essere privi di guest.
+
+```bash
+# pve1
+sudo pvecm create study --link0 192.168.57.11
+
+# pve2 e pve3; verificare il fingerprint quando richiesto
+sudo pvecm add 192.168.57.11 --link0 <IP_MANAGEMENT_DEL_NODO>
+
+sudo pvecm status
+sudo pvecm nodes
+```
+
+Nelle Datacenter Options selezionare `10.57.1.0/24` come migration network.
+Creare VLAN e VM di prova su `vmbr2`, verificando tagging, isolamento e MTU.
+Migrare una VM e controllare con `tcpdump` che il traffico passi da `vmbr1`.
+
+## 5. Fault test e chiusura
+
+Interrompere una sola rete alla volta: prima migrazione, poi guest, infine
+management/Corosync. Annotare quali funzioni degradano e verificare il quorum
+prima di ogni operazione. Ripristinare la rete prima del test successivo; non
+usare `pvecm expected` per aggirare una perdita di quorum.
+
+Prima di passare al `Vagrantfile` assistito distruggere esplicitamente le VM
+manuali usando ancora `VAGRANT_VAGRANTFILE=Vagrantfile.start`. I due percorsi
+non condividono la configurazione guest.

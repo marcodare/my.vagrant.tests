@@ -1,42 +1,35 @@
 #!/usr/bin/env bash
+# Verifica e completa il nodo creato dalla box locale Proxmox.
 set -euo pipefail
+
 series=${1:?Specificare la versione software da lab.json}
 [[ $series == 9.2 ]] || { echo 'Versione non prevista da questo provisioner'; exit 1; }
-export DEBIAN_FRONTEND=noninteractive
+[[ -f /etc/infra-box-release && -f /var/lib/infra-lab/pve-identity ]] || {
+  echo 'Nodo non inizializzato dalla box locale Proxmox.' >&2
+  exit 1
+}
 # shellcheck source=/dev/null
 source /etc/os-release
 [[ $VERSION_CODENAME == trixie && $(cat /var/lib/infra-lab/role) == pve ]] || exit 1
-curl -fsSL https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg -o /usr/share/keyrings/proxmox-archive-keyring.gpg
-echo 'deb [signed-by=/usr/share/keyrings/proxmox-archive-keyring.gpg] http://download.proxmox.com/debian/pve trixie pve-no-subscription' > /etc/apt/sources.list.d/infra-pve.list
-# Disattiva solo il repository enterprise predefinito installato dal pacchetto.
-for file in /etc/apt/sources.list.d/pve-enterprise.list /etc/apt/sources.list.d/pve-enterprise.sources; do
-  if [[ -f $file ]]; then mv "$file" "$file.disabled"; fi
-done
-cat > /etc/apt/preferences.d/infra-pve <<EOF
-Package: proxmox-ve pve-manager
-Pin: version $series.*
-Pin-Priority: 1000
 
-Package: proxmox-ve pve-manager
-Pin: version *
-Pin-Priority: -1
-EOF
-apt-get update
-apt-get install -y proxmox-default-kernel
-if [[ $(uname -r) != *-pve ]]; then
-  echo 'Kernel installato. Eseguire vagrant reload, poi vagrant provision.'
-  exit 0
-fi
+installed=$(dpkg-query -W -f='${Version}' pve-manager)
+[[ $installed == "$series".* ]] || {
+  echo "pve-manager $installed non appartiene al ramo $series." >&2
+  exit 1
+}
+[[ $(uname -r) == *-pve ]] || { echo 'La box non usa il kernel PVE.' >&2; exit 1; }
 modprobe kvm_amd
 [[ -c /dev/kvm ]] || { echo 'Nested KVM assente: verificare SVM/VirtualBox.' >&2; exit 1; }
-echo 'postfix postfix/main_mailer_type select Local only' | debconf-set-selections
-echo 'postfix postfix/mailname string lab.test' | debconf-set-selections
-apt-get install -y "proxmox-ve=${series}.*" "pve-manager=${series}.*" postfix open-iscsi chrony
-for file in /etc/apt/sources.list.d/pve-enterprise.list /etc/apt/sources.list.d/pve-enterprise.sources; do
-  if [[ -f $file ]]; then mv "$file" "$file.disabled"; fi
-done
-# Un'installazione su Debian non crea il local-lvm dell'installer ISO.
+[[ ! -e /etc/pve/corosync.conf ]] || { echo 'Cluster già configurato.' >&2; exit 1; }
+
+# La finalizzazione rigenera pmxcfs, quindi ricrea esplicitamente gli storage
+# locali che l'installer ISO aveva registrato nel database del template.
 if ! pvesm status | awk 'NR>1 {print $1}' | grep -qx local; then
-  pvesm add dir local --path /var/lib/vz --content iso,vztmpl,backup,images,rootdir
+  pvesm add dir local --path /var/lib/vz --content iso,vztmpl,backup
 fi
-echo 'Proxmox installato. Impostare sudo passwd root via vagrant ssh; creare il cluster dal README.'
+if lvs --noheadings -o lv_name pve 2>/dev/null | awk '{$1=$1};1' | grep -qx data \
+    && ! pvesm status | awk 'NR>1 {print $1}' | grep -qx local-lvm; then
+  pvesm add lvmthin local-lvm --vgname pve --thinpool data --content images,rootdir
+fi
+
+echo 'Nodo PVE pronto e standalone. Impostare la password root e creare il cluster dal README.'

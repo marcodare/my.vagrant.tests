@@ -1,8 +1,8 @@
 {
   "id": "proxmox_3nodes_networks",
   "subnet": 57,
-  "box": "bento/debian-13",
-  "box_version": "202510.26.0",
+  "box": "local/proxmox-ve-9.2",
+  "box_version": "0",
   "internal_networks": [
     {
       "name": "migration",

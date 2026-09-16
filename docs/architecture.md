@@ -73,7 +73,9 @@ Il lab Linux usa `mac_id=72` perché il byte 66 è già occupato da k3s; 72 è
 fuori dal pool host-only e non verrà ereditato per default da nuove subnet.
 
 Ogni nodo può dichiarare `box` e `box_version`; senza override vale la box del
-lab. Nel ruolo `linux` (lab `linux_4nodes`) la box va scelta fra `LINUX_BOXES`
+lab. I nodi PVE di entrambi i percorsi dei quattro laboratori Proxmox usano
+`local/proxmox-ve-9.2` versione `0`; nel lab con backup il nodo PBS sovrascrive
+la box del lab e resta su Debian. Nel ruolo `linux` (lab `linux_4nodes`) la box va scelta fra `LINUX_BOXES`
 in `scripts/lab_config.py`; negli altri ruoli deve coincidere con quella del
 ruolo, come `bento/freebsd-14.3` per `opnsense` accanto ai Debian.
 
@@ -136,11 +138,13 @@ Ogni cartella è un'unità condivisibile e contiene quattro ingressi obbligatori
 
 Gli indirizzi e i nomi NIC degli STEPS sono il profilo di riferimento del lab.
 Su VM generiche o bare metal vanno sostituiti mantenendo separazione delle reti,
-quorum, numero di dischi e ruoli. Il Vagrant.start è soltanto il modo più rapido
-per procurarsi le macchine vuote su VirtualBox.
+quorum, numero di dischi e ruoli. Il file basic è soltanto il modo più rapido
+per procurarsi macchine non configurate su VirtualBox; la box può già contenere
+il prodotto di base, come avviene per Proxmox VE.
 
 1. Creare cartella descrittiva e scegliere subnet/MAC non sovrapposte.
-2. Copiare e modificare `Vagrantfile` e `Vagrant.start`, entrambi autonomi, e definire `lab.json`.
+2. Copiare e modificare `Vagrantfile` e il file basic (`Vagrant.start` oppure
+   `Vagrantfile.start`), entrambi autonomi, e definire `lab.json`.
 3. Mantenere tutti i provisioner nella cartella del lab; nessun import da shared/.
 4. Documentare risorse e limiti nel README; configurazione manuale ed esercizi in STEPS.md.
 5. Aggiornare README, validatore del layout e la tabella delle reti.

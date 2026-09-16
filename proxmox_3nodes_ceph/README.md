@@ -1,14 +1,14 @@
 # proxmox_3nodes_ceph
 
-Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Per studiare tutto a mano usare `Vagrantfile.start` e seguire [STEPS.md](STEPS.md).
 Il `Vagrantfile` mantiene il percorso assistito già disponibile.
 
 ## Due percorsi di avvio
 
 ```bash
 ./scripts/up.sh                                      # assistito
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh pve1
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
 ```
 
 Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
@@ -16,6 +16,10 @@ Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
 
 Versioni richieste: **Proxmox VE 9.2**.
 Patch consentite nel ramo indicato; selezione in `lab.json` e pin APT nel guest.
+Il percorso assistito richiede la box locale `local/proxmox-ve-9.2` versione
+`0`, costruita e aggiunta seguendo [`create_boxes/proxmox`](../create_boxes/proxmox/README.md).
+Anche il percorso manuale usa la stessa box, ma non esegue alcun provisioner:
+identità PVE, reti, cluster e Ceph vengono configurati seguendo `STEPS.md`.
 
 Laboratorio autonomo Vagrant/VirtualBox. **Solo questo lab acceso**; spegnere
 le altre infrastrutture prima di iniziare. Modificare liberamente `Vagrantfile`,
@@ -50,8 +54,10 @@ sudo passwd root
 Ripetere `sudo passwd root` anche su pve2/pve3 e, se presente, pbs1. Accedere
 alle UI con root e realm Linux PAM. Nessuna password è inclusa nel repository.
 
-Lo script avvia Debian e installa il kernel PVE, esegue reload, poi completa
-l'installazione di Proxmox. Leggere il [runbook locale](docs/proxmox.md) per
+Lo script clona la box PVE, sostituisce l'identità template con hostname, CA e
+certificati specifici del nodo, configura le reti e infine esegue un reload.
+Rifiuta la finalizzazione se trova cluster, VM o container preesistenti.
+Leggere il [runbook locale](docs/proxmox.md) per
 verifica KVM, creazione del cluster, join, prima VM e migrazione.
 In quel runbook sostituire `S` con **58**.
 

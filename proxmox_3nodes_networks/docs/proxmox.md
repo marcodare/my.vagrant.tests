@@ -9,14 +9,13 @@ senza sostituzione. Ogni README riporta gli indirizzi effettivi.
 Dalla cartella scelta, `./scripts/up.sh` esegue:
 
 ```bash
-vagrant up --provider=virtualbox  # Debian + rete + kernel PVE
-vagrant reload                  # avvio del kernel PVE e dei bridge
-vagrant provision               # installazione dello stack PVE
+vagrant up --provider=virtualbox  # clone PVE, identità univoca e rete persistente
+vagrant reload                   # attivazione dei bridge configurati
 ```
 
-Il primo passaggio non ha ancora la UI Proxmox. Nessun plugin per il reboot.
-Su PBS il pacchetto server è installato già al primo passaggio. La nuova rete
-Debian è attiva dopo il reload. In caso di download interrotto ripetere lo step
+La UI sugli indirizzi management è disponibile dopo il reload. Nessun plugin
+gestisce il reboot. Su PBS il pacchetto server è installato al primo passaggio.
+La nuova rete è attiva dopo il reload. In caso di download interrotto ripetere lo step
 fallito; dopo esercizi sulle reti non rilanciare il provisioner base: riscrive
 il layout iniziale dei bridge.
 
@@ -58,9 +57,9 @@ e `pvecm status`: tre nodi e quorum. In alternativa usare Datacenter → Cluster
 
 ## Prima VM e migrazione
 
-1. In Datacenter → Storage → `local`, abilitare contenuti **Disk image** e
-   **Container** oltre a ISO/template. L'installazione su Debian non crea
-   `local-lvm`: usare `local`, su directory `/var/lib/vz`.
+1. Verificare in Datacenter → Storage la presenza di `local` e `local-lvm`.
+   Il provisioner li ricrea dopo la nuova identità `pmxcfs`; usare `local-lvm`
+   per i dischi guest oppure abilitare Disk image su `local` per l'esercizio.
 2. Caricare una ISO Linux in `local` del primo nodo e creare VM 100, 2 vCPU,
    2 GiB RAM, disco 12 GiB, NIC VirtIO su `vmbr0`. CPU uguale su tutti i nodi,
    inizialmente `host`. Verificare spazio effettivo con `df -h /var/lib/vz`.
