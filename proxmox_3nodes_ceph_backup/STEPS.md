@@ -11,6 +11,10 @@ dei dischi prima di inizializzarli. Un PBS reale va posto in un failure domain s
 1. Avviare con `VAGRANT_VAGRANTFILE=Vagrant.start vagrant up`. Sui tre PVE
    configurare Proxmox VE 9.2, cluster, vmbr0 `192.168.59.11-.13/24` e rete
    Ceph esclusiva `10.59.1.11-.13/24`; seguire [docs/ceph.md](docs/ceph.md).
+   Su tutti i nodi che passano a `ifupdown2`, incluso PBS, installare prima
+   `ifupdown2 isc-dhcp-client`: su Debian 13 il client DHCP è solo suggerito.
+   Conservare la NIC NAT su DHCP e verificare `command -v dhclient`, indirizzo
+   NAT, default route e risoluzione DNS dopo il riavvio.
 2. Verificare e inizializzare i tre dischi OSD da 100 GB, quindi costruire pool
    RBD replicato e una VM di prova.
 3. Su pbs1 configurare soltanto la management `192.168.59.20/24`: PBS non ha

@@ -12,7 +12,11 @@ i repository. Prima di modificare kernel o rete conservare accesso console.
    `vagrant ssh pve1`. Identificare NIC e MAC con `ip -br link`.
 2. Su ogni nodo impostare hostname, `/etc/hosts`, NTP e un bridge `vmbr0` sulla
    NIC host-only: `192.168.56.11/24`, `.12`, `.13`; nessun gateway su vmbr0.
-   Conservare la default route della NIC NAT e verificare ping e risoluzione.
+   Se si passa da `systemd-networkd` a `ifupdown2`, installare prima entrambi i
+   pacchetti con `apt-get install ifupdown2 isc-dhcp-client`: su Debian 13 il
+   client DHCP è solo suggerito da `ifupdown2`. Configurare la NIC NAT con
+   `inet dhcp`; prima del riavvio verificare `command -v dhclient`, quindi dopo
+   il riavvio controllare indirizzo, default route, ping e risoluzione DNS.
 3. Aggiungere chiave e repository Proxmox VE 9.2 no-subscription per Debian 13,
    installare il kernel PVE e riavviare. Verificare `uname -r`, poi installare
    `proxmox-ve`, rimuovere il kernel Debian solo dopo il boot corretto e

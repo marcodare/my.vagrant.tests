@@ -10,7 +10,10 @@ Su hardware reale separare failure domain, alimentazione e storage fisico.
 
 1. Avviare `VAGRANT_VAGRANTFILE=Vagrant.start vagrant up`. Configurare Proxmox
    VE 9.2, cluster, hostname e vmbr0 `192.168.58.11-.13/24` seguendo
-   [docs/proxmox.md](docs/proxmox.md).
+   [docs/proxmox.md](docs/proxmox.md). Se la rete viene affidata a `ifupdown2`,
+   installare prima `ifupdown2 isc-dhcp-client`: Debian 13 considera il client
+   DHCP solo un suggerimento. Lasciare la NIC NAT su DHCP e verificare
+   `command -v dhclient`, indirizzo NAT, default route e DNS dopo il riavvio.
 2. Configurare `vmbr1` esclusivamente per Ceph con `10.58.1.11-.13/24`, senza
    gateway. Verificare che il secondo disco raw da 100 GB sia vuoto con `lsblk`.
 3. Installare i pacchetti Ceph compatibili dalla UI/CLI PVE. Inizializzare Ceph

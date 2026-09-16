@@ -35,7 +35,10 @@ iface_for_mac() {
   return 1
 }
 nic=$(iface_for_mac "$mac")
-apt-get install -y ifupdown2
+# ifupdown2 usa dhclient per le interfacce DHCP, ma su Debian 13 il relativo
+# pacchetto è solo suggerito. Installarlo esplicitamente mantiene operativa la
+# NIC NAT usata da Vagrant per SSH dopo il passaggio da systemd-networkd.
+apt-get install -y ifupdown2 isc-dhcp-client
 nat=$(ip -4 route show default | awk 'NR==1 {print $5}')
 [[ -n $nat && $nat != "$nic" && $nat != vmbr* ]] || { echo 'NIC NAT non identificata'; exit 1; }
 # Il primo boot conserva la rete corrente; il nuovo layout entra al reload.

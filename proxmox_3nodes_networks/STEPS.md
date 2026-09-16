@@ -14,7 +14,11 @@ all'uplink di servizio scelto nell'ambiente reale.
 2. Associare le NIC tramite MAC, senza dipendere dal nome assegnato dal kernel.
    Creare `vmbr0` su `192.168.57.11-.13/24`, `vmbr1` su
    `10.57.1.11-.13/24` per migrazione e `vmbr2` su `10.57.2.11-.13/24` per
-   guest/VLAN. Non impostare gateway su questi bridge; la NAT resta tecnica.
+   guest/VLAN. Non impostare gateway su questi bridge; la NAT resta tecnica e
+   configurata con DHCP. Prima di sostituire `systemd-networkd`, installare
+   `ifupdown2` insieme a `isc-dhcp-client`, che su Debian 13 è solo suggerito:
+   verificare `command -v dhclient` prima del riavvio e poi indirizzo NAT,
+   default route e risoluzione DNS.
 3. Rendere `vmbr2` VLAN-aware, creare VLAN e VM di prova, quindi verificare
    isolamento, tagging e MTU con ping e cattura pacchetti.
 4. Creare il cluster PVE su vmbr0. Nelle Datacenter Options selezionare la rete
