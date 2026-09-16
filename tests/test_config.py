@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.lab_config import HOSTONLY_POOL, load_spec
+from scripts.lab_config import HOSTONLY_POOL, LINUX_BOXES, load_spec, node_networks
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -47,18 +47,31 @@ def test_rejects_invalid_topologies(tmp_path: Path, invalid: str) -> None:
 
 def test_all_labs_have_valid_topologies() -> None:
     paths = sorted(ROOT.glob("*/lab.json"))
-    assert len(paths) == 11
+    assert len(paths) == 13
     for path in paths:
         load_spec(path.parent)
 
 
 def test_manual_start_files_do_not_run_provisioners() -> None:
     paths = sorted(ROOT.glob("*/Vagrant.start"))
-    assert len(paths) == 11
+    assert len(paths) == 13
     for path in paths:
         source = path.read_text()
         assert ".provision" not in source
         assert "auto_config: false" in source
+
+
+def test_all_vagrantfiles_disable_optional_vbguest_updates() -> None:
+    guard = (
+        "config.vbguest.auto_update = false "
+        "if Vagrant.has_plugin?('vagrant-vbguest')"
+    )
+    labs = sorted(ROOT.glob("*/lab.json"))
+    assert len(labs) == 13
+    for lab in labs:
+        for name in ("Vagrantfile", "Vagrant.start"):
+            source = (lab.parent / name).read_text()
+            assert guard in source, f"{lab.parent.name}/{name}"
 
 
 def test_pbs_is_not_attached_to_ceph_network() -> None:
@@ -169,3 +182,63 @@ def test_provisioners_receive_hosts_instead_of_a_fixed_list() -> None:
         source = directory.read_text()
         assert "hosts=$" in source, directory
         assert 'tr \';\' \'\\n\' <<< "$hosts"' in source, directory
+
+
+def test_linux_lab_pins_one_box_per_node() -> None:
+    """Ogni nodo del lab multi-distribuzione dichiara box e versione fissate."""
+    spec = load_spec(ROOT / "linux_4nodes")
+    boxes = {node["box"] for node in spec["nodes"]}
+    assert boxes == set(LINUX_BOXES)
+    for node in spec["nodes"]:
+        assert node["role"] == "linux"
+        assert node["box_version"] == LINUX_BOXES[node["box"]]
+    for name in ("Vagrantfile", "Vagrant.start"):
+        source = (ROOT / "linux_4nodes" / name).read_text()
+        assert "node.fetch('box')" in source, name
+        assert "node.fetch('box_version')" in source, name
+
+
+@pytest.mark.parametrize("invalid", ["unknown_box", "wrong_box_version", "box_on_pve"])
+def test_rejects_wrong_per_node_boxes(tmp_path: Path, invalid: str) -> None:
+    source = "proxmox_3nodes_simple" if invalid == "box_on_pve" else "linux_4nodes"
+    directory = tmp_path / source
+    directory.mkdir()
+    spec = json.loads((ROOT / source / "lab.json").read_text())
+    if invalid == "unknown_box":
+        spec["nodes"][0]["box"] = "bento/fedora-43"
+    elif invalid == "wrong_box_version":
+        spec["nodes"][2]["box_version"] = "202510.26.0"
+    else:
+        spec["nodes"][0]["box"] = "bento/ubuntu-22.04"
+    (directory / "lab.json").write_text(json.dumps(spec))
+    with pytest.raises(ValueError):
+        load_spec(directory)
+
+
+def test_opnsense_lab_routes_segments_through_the_firewall() -> None:
+    """Ogni Debian sta su un solo segmento; OPNsense su tutti, con box propria."""
+    lab = ROOT / "opnsense_4nodes_networks"
+    spec = load_spec(lab)
+    firewall = next(n for n in spec["nodes"] if n["role"] == "opnsense")
+    assert firewall["box"] == "bento/freebsd-14.3"
+    segments = [n["name"] for n in node_networks(spec, firewall)]
+    assert segments == ["blue", "green", "dmz"]
+    for node in spec["nodes"]:
+        if node["role"] == "debian":
+            assert len(node_networks(spec, node)) == 1, node["name"]
+    for name in ("Vagrantfile", "Vagrant.start"):
+        source = (lab / name).read_text()
+        assert "vm.ssh.shell = '/bin/sh'" in source, name
+    provisioner = (lab / "scripts/provision/opnsense.sh").read_text()
+    assert "opnsense-bootstrap.sh.in" in provisioner
+    assert "<sudo_allow_wheel>2</sudo_allow_wheel>" in provisioner
+
+
+def test_rejects_unknown_network_in_node_networks(tmp_path: Path) -> None:
+    directory = tmp_path / "opnsense_4nodes_networks"
+    directory.mkdir()
+    spec = json.loads((ROOT / directory.name / "lab.json").read_text())
+    spec["nodes"][0]["networks"] = ["red"]
+    (directory / "lab.json").write_text(json.dumps(spec))
+    with pytest.raises(ValueError, match="networks"):
+        load_spec(directory)

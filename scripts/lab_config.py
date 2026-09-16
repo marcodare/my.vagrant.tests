@@ -35,6 +35,20 @@ ROLE_BOXES = {
     "k8s-lb": "bento/ubuntu-24.04",
     "k8s-control": "bento/ubuntu-24.04",
     "k8s-worker": "bento/ubuntu-24.04",
+    "debian": "bento/debian-13",
+    # OPNsense non ha una box ufficiale: si parte da FreeBSD pulito e lo si
+    # converte con opnsense-bootstrap, il metodo documentato dal progetto.
+    "opnsense": "bento/freebsd-14.3",
+}
+# Il ruolo "linux" è l'unico in cui ogni nodo dichiara la propria box: serve al
+# lab multi-distribuzione, dove Ubuntu e Rocky convivono nella stessa cartella.
+# Le versioni sono fissate per box perché non esiste una release Bento comune
+# a tutte: Ubuntu 26.04 è pubblicata solo dalla 202606.01.0 in poi.
+LINUX_BOXES = {
+    "bento/ubuntu-24.04": "202510.26.0",
+    "bento/ubuntu-26.04": "202606.01.0",
+    "bento/rockylinux-9": "202510.26.0",
+    "bento/rockylinux-10": "202510.26.0",
 }
 PRODUCT_VERSIONS = {
     "pve": "9.2",
@@ -46,6 +60,7 @@ PRODUCT_VERSIONS = {
     "k3s-worker": "v1.36.4+k3s1",
     "k8s-control": "1.37",
     "k8s-worker": "1.37",
+    "opnsense": "26.1",
 }
 
 
@@ -68,7 +83,7 @@ def load_spec(directory: Path) -> dict[str, Any]:
     integer(spec.get("mac_id", spec["subnet"]), 1, 255, "mac_id")
     if spec.get("netmask", "255.255.255.0") not in {"255.255.255.0", "255.255.255.128"}:
         raise ValueError("Netmask prevista /24 o /25")
-    if spec.get("box") not in set(ROLE_BOXES.values()):
+    if spec.get("box") not in set(ROLE_BOXES.values()) | set(LINUX_BOXES):
         raise ValueError("Box non prevista")
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", spec.get("box_version", "")):
         raise ValueError("Versione box non valida")
@@ -92,10 +107,21 @@ def load_spec(directory: Path) -> dict[str, Any]:
         integer(node.get("cpus"), 1, 16, "cpus")
         if "disk_gb" in node:
             integer(node["disk_gb"], 10, 1000, "disk_gb")
-        if node.get("role") not in ROLE_BOXES:
+        # Un nodo può dichiarare la propria box: serve ai lab multi-distribuzione
+        # e a quelli con un'appliance accanto ai nodi Linux. Senza override vale
+        # la box del lab.
+        box = node.get("box", spec["box"])
+        box_version = node.get("box_version", spec["box_version"])
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", str(box_version)):
+            raise ValueError("Versione box del nodo non valida")
+        if node.get("role") == "linux":
+            if box not in LINUX_BOXES:
+                raise ValueError("Nodo linux senza box prevista")
+            if box_version != LINUX_BOXES[box]:
+                raise ValueError("Versione box diversa da quella fissata")
+        elif node.get("role") not in ROLE_BOXES:
             raise ValueError("Ruolo non valido")
-        expected = ROLE_BOXES[node["role"]]
-        if spec["box"] != expected:
+        elif box != ROLE_BOXES[node["role"]]:
             raise ValueError("Box incompatibile con il ruolo")
         if node["role"] in PRODUCT_VERSIONS:
             versions = spec.get("versions", {})
@@ -108,6 +134,11 @@ def load_spec(directory: Path) -> dict[str, Any]:
                 )
         if "attach_internal" in node and type(node["attach_internal"]) is not bool:
             raise ValueError("attach_internal deve essere booleano")
+        if "networks" in node and (
+            not isinstance(node["networks"], list)
+            or len(set(node["networks"])) != len(node["networks"])
+        ):
+            raise ValueError("networks deve essere una lista senza duplicati")
         if "api_host_port" in node:
             integer(node["api_host_port"], 1024, 65535, "api_host_port")
     sans = spec.get("api_sans", [])
@@ -168,7 +199,24 @@ def load_spec(directory: Path) -> dict[str, Any]:
         ):
             raise ValueError("Rete interna duplicata o fuori 10.0.0.0/8")
         prefixes.add(prefix)
+    for node in nodes:
+        if not set(node.get("networks", [])) <= network_names:
+            raise ValueError("networks cita una rete interna non dichiarata")
     return spec
+
+
+def node_networks(spec: dict[str, Any], node: dict[str, Any]) -> list[dict[str, Any]]:
+    """Reti interne collegate a un nodo, nell'ordine delle NIC da 3 in poi.
+
+    `attach_internal=false` esclude tutte le reti; `networks` ne sceglie un
+    sottoinsieme, come nei lab in cui ogni nodo sta su un segmento diverso.
+    """
+    if not node.get("attach_internal", True):
+        return []
+    networks: list[dict[str, Any]] = spec.get("internal_networks", [])
+    if "networks" not in node:
+        return networks
+    return [network for network in networks if network["name"] in node["networks"]]
 
 
 def mac_address(subnet: int, node: int, slot: int, *, colon: bool = False) -> str:

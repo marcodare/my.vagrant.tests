@@ -17,6 +17,10 @@ hosts = (["#{api_vip} kube-api.lab.test kube-api"] + spec.fetch('nodes').map do 
 end).join(';')
 
 Vagrant.configure('2') do |config|
+  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  # Evita che il plugin opzionale vagrant-vbguest modifichi il guest prima dei provisioner.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+
   config.vm.box = spec.fetch('box')
   config.vm.box_version = spec.fetch('box_version')
   config.vm.box_architecture = 'amd64'

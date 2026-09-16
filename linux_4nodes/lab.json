@@ -1,0 +1,14 @@
+{
+  "id": "linux_4nodes",
+  "subnet": 66,
+  "mac_id": 72,
+  "box": "bento/ubuntu-24.04",
+  "box_version": "202510.26.0",
+  "internal_networks": [],
+  "nodes": [
+    {"name": "ubuntu24", "role": "linux", "host": 11, "cpus": 2, "memory": 4096, "box": "bento/ubuntu-24.04", "box_version": "202510.26.0"},
+    {"name": "rocky9", "role": "linux", "host": 12, "cpus": 2, "memory": 4096, "box": "bento/rockylinux-9", "box_version": "202510.26.0"},
+    {"name": "ubuntu26", "role": "linux", "host": 13, "cpus": 2, "memory": 4096, "box": "bento/ubuntu-26.04", "box_version": "202606.01.0"},
+    {"name": "rocky10", "role": "linux", "host": 14, "cpus": 2, "memory": 4096, "box": "bento/rockylinux-10", "box_version": "202510.26.0"}
+  ]
+}

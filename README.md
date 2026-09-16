@@ -23,6 +23,8 @@ volta**; tutte le altre restano spente e conservano i propri dischi.
 | [zsvirt_1node_eval](zsvirt_1node_eval/README.md) | 1 all-in-one | 24 GiB | 1 | Valutazione da appliance/box locale |
 | [k3s_1control_3workers](k3s_1control_3workers/README.md) | 1 control + 3 worker | 32 GiB | 2 | K3s, Flannel, scheduling e fault worker |
 | [k8s_hacontrol_3workers](k8s_hacontrol_3workers/README.md) | 2 LB + 3 control + 3 worker | 68 GiB | 2 | kubeadm HA, stacked etcd e Cilium |
+| [linux_4nodes](linux_4nodes/README.md) | Ubuntu 24.04/26.04, Rocky 9/10 | 16 GiB | 1 | Confronto distribuzioni, rete e strumenti base |
+| [opnsense_4nodes_networks](opnsense_4nodes_networks/README.md) | OPNsense + 4 Debian | 20 GiB | 4 | Firewall/router fra segmenti, regole, NAT, log |
 
 Ogni VM ha anche una NIC NAT tecnica per Vagrant e download. I guest annidati
 consumano la RAM già assegnata ai nodi. Le vCPU sono condivise con l'host.
@@ -129,9 +131,13 @@ snapshot e ISO nell'uso dell'SSD.
 
 ## Cosa viene preparato
 
-- Box Bento amd64 fissate a `202510.26.0`: Debian 13, Ubuntu 22.04/24.04.
+- Box Bento amd64 fissate a `202510.26.0`: Debian 13, Ubuntu 22.04/24.04,
+  Rocky Linux 9/10, FreeBSD 14.3. Ubuntu 26.04 è fissata a `202606.01.0`, prima release Bento disponibile.
+- OPNsense 26.1 viene installato sulla box FreeBSD con `opnsense-bootstrap`, lo
+  strumento ufficiale del progetto: non esiste una box OPNsense ufficiale.
 - ZSvirt richiede una box locale preparata dall’OVA ufficiale: non viene scaricata automaticamente.
 - Proxmox VE 9.2 / PBS 4.2 dai repository no-subscription, CloudStack dal ramo 4.23.
+- OPNsense: interfacce, utente Vagrant e poche regole iniziali; il resto è esercizio.
 - VM, NIC, bridge, sincronizzazione oraria e pacchetti base.
 - CloudStack semplice: database, manager, agent, NFS e reti fake public/private.
 - CloudStack HA: sei nodi, pacchetti backend, HAProxy/Keepalived e runbook di assemblaggio;

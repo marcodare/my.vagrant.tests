@@ -18,6 +18,8 @@ ogni cartella è autosufficiente e può essere copiata da sola.
 | zsvirt | 192.168.63.128/25 management | nessuna |
 | k3s | 192.168.64.0/24 management | 10.64.0.0/24 cluster/overlay |
 | Kubernetes HA | 192.168.65.0/24 management/API | 10.65.0.0/24 cluster/etcd |
+| Linux 4 nodi | 192.168.66.0/24 rete del lab | nessuna |
+| OPNsense 4 nodi | 192.168.67.0/24 management/GUI (LAN) | 10.67.1.0/24 blue; 10.67.2.0/24 green; 10.67.3.0/24 dmz |
 
 Il segmento nella colonna centrale è **host-only**, accessibile dal Bosgame.
 In CloudStack rappresenta la fake public; il management effettivo è sulla privata. Le reti aggiuntive sono
@@ -56,6 +58,7 @@ del manager (80 GB), sufficiente per pochi template di studio. Nessuna
 formattazione automatica dei dischi aggiuntivi.
 CloudStack HA: 200 GB raw per KVM, usati dal backend distribuito e dal secondario.
 OpenStack: dischi OS 80 GB e dischi istanze locali, nessun Cinder nella base.
+OPNsense: il disco della box FreeBSD non viene esteso; i Debian hanno OS 80 GB.
 ZSvirt: OS 200 GB + dati 100 GB, box locale da OVA ufficiale.
 
 Nei PVE Ceph, il campo `attach_internal=false` su PBS evita la NIC Ceph.
@@ -66,6 +69,21 @@ trasporta anche VLAN guest 100–199. Le VIP HA sono .4 gateway/DNS, .5 API,
 OpenStack e ZSvirt usano due metà disgiunte di .63/24: impostare esplicitamente
 netmask /25 in VirtualBox. Non riusare una host-only /24 preesistente per entrambe.
 ZSvirt usa `mac_id=64` per mantenere MAC distinti pur condividendo il terzo ottetto.
+Il lab Linux usa `mac_id=72` perché il byte 66 è già occupato da k3s; 72 è
+fuori dal pool host-only e non verrà ereditato per default da nuove subnet.
+
+Ogni nodo può dichiarare `box` e `box_version`; senza override vale la box del
+lab. Nel ruolo `linux` (lab `linux_4nodes`) la box va scelta fra `LINUX_BOXES`
+in `scripts/lab_config.py`; negli altri ruoli deve coincidere con quella del
+ruolo, come `bento/freebsd-14.3` per `opnsense` accanto ai Debian.
+
+Un nodo può limitare le reti interne a cui è collegato con `networks`, un
+sottoinsieme dei nomi di `internal_networks`: nel lab OPNsense ogni Debian sta
+su un solo segmento e il firewall su tutti. Le NIC seguono l'ordine della lista
+del lab, saltando le reti escluse; `attach_internal=false` le esclude tutte.
+Nel lab OPNsense la NIC NAT è la WAN del firewall (uscita e `vagrant ssh`), la
+host-only è la LAN con la GUI e i segmenti interni sono OPT1–OPT3; i Debian
+instradano verso gli altri segmenti attraverso il firewall (.1 di ogni rete).
 
 ## Accesso all'API Kubernetes
 

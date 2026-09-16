@@ -1,0 +1,107 @@
+# frozen_string_literal: true
+# Percorso assistito: quattro Debian 13 su tre segmenti interni e un OPNsense
+# che li collega. I Debian ricevono hostname, /etc/hosts, IP e rotte verso il
+# firewall; FreeBSD viene convertito in OPNsense con opnsense-bootstrap e una
+# config.xml generata dai dati di lab.json. Le regole restano un esercizio.
+
+require 'json'
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+subnet = spec.fetch('subnet')
+mac_id = spec.fetch('mac_id', subnet)
+networks = spec.fetch('internal_networks')
+opnsense_release = spec.fetch('versions').fetch('opnsense')
+
+# Reti interne collegate a un nodo, nell'ordine delle NIC da 3 in poi: i Debian
+# stanno su un solo segmento, OPNsense su tutti. Stessa regola di Vagrant.start.
+node_networks = lambda do |node|
+  next [] unless node.fetch('attach_internal', true)
+  next networks unless node.key?('networks')
+
+  networks.select { |network| node.fetch('networks').include?(network.fetch('name')) }
+end
+
+# Il firewall è .1 su ogni segmento interno; i nodi usano il proprio host.
+gateway = ->(network) { "#{network.fetch('prefix')}.1" }
+mac_for = lambda do |index, slot|
+  format('080027%02X%02X%02X', mac_id, index + 1, slot).scan(/../).join(':').downcase
+end
+
+# /etc/hosts con gli indirizzi dei segmenti interni, non di management: così
+# il traffico per nome fra nodi di reti diverse attraversa davvero OPNsense.
+firewall = spec.fetch('nodes').find { |node| node.fetch('role') == 'opnsense' }
+hosts = spec.fetch('nodes').reject { |node| node.fetch('role') == 'opnsense' }.map do |node|
+  "#{node_networks.call(node).fetch(0).fetch('prefix')}.#{node.fetch('host')} #{node.fetch('name')}"
+end
+hosts << "192.168.#{subnet}.#{firewall.fetch('host')} #{firewall.fetch('name')}"
+networks.each { |network| hosts << "#{gateway.call(network)} #{firewall.fetch('name')}-#{network.fetch('name')}" }
+hosts = hosts.join(';')
+
+Vagrant.configure('2') do |config|
+  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  # Evita che il plugin opzionale vagrant-vbguest modifichi il guest prima dei provisioner.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.boot_timeout = 900
+
+  spec.fetch('nodes').each_with_index do |node, index|
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+    attached = node_networks.call(node)
+
+    config.vm.define node.fetch('name') do |vm|
+      vm.vm.box = node.fetch('box', spec.fetch('box'))
+      vm.vm.box_version = node.fetch('box_version', spec.fetch('box_version'))
+
+      # NIC 1 NAT per SSH e pacchetti; NIC 2 host-only di management;
+      # NIC 3 e successive sui segmenti interni collegati al nodo.
+      vm.vm.network 'private_network', ip: address, auto_config: false
+      attached.each do |network|
+        vm.vm.network 'private_network', ip: "#{network.fetch('prefix')}.#{node.fetch('host')}",
+          auto_config: false,
+          virtualbox__intnet: "#{spec.fetch('id')}-#{network.fetch('name')}"
+      end
+
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        # Console visibile per il firewall: l'assegnazione interfacce e il
+        # menu OPNsense sono utili quando SSH non è ancora disponibile.
+        vb.gui = node.fetch('role') == 'opnsense'
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', 'off']
+        vb.customize ['modifyvm', :id, '--macaddress2', format('080027%02X%02X02', mac_id, index + 1)]
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+        attached.each_with_index do |_network, position|
+          slot = position + 3
+          vb.customize ['modifyvm', :id, "--macaddress#{slot}", format('080027%02X%02X%02X', mac_id, index + 1, slot)]
+          vb.customize ['modifyvm', :id, "--nicpromisc#{slot}", 'allow-all']
+        end
+      end
+
+      if node.fetch('role') == 'opnsense'
+        # OPNsense non ha bash: il communicator deve usare /bin/sh.
+        vm.ssh.shell = '/bin/sh'
+        # Segmenti interni come "nome,mac,ip": OPNsense li assegna a OPT1..OPTn.
+        segments = attached.each_with_index.map do |network, position|
+          "#{network.fetch('name')},#{mac_for.call(index, position + 3)},#{gateway.call(network)}"
+        end.join(';')
+        vm.vm.provision 'shell', path: 'scripts/provision/opnsense.sh',
+          args: [node.fetch('name'), opnsense_release, address, mac_for.call(index, 2), segments]
+      else
+        vm.vm.hostname = node.fetch('name')
+        vm.vm.disk :disk, size: '80GB', primary: true
+        segment = attached.fetch(0)
+        # Rotte verso gli altri segmenti interni via OPNsense; la default route
+        # resta sulla NAT, così gli esercizi scelgono cosa passa dal firewall.
+        routes = (networks - [segment]).map { |network| "#{network.fetch('prefix')}.0/24" }.join(',')
+        vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
+          args: [node.fetch('name'), address, mac_for.call(index, 2),
+                 "#{segment.fetch('prefix')}.#{node.fetch('host')}", mac_for.call(index, 3),
+                 gateway.call(segment), routes, hosts]
+        vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
+      end
+    end
+  end
+end

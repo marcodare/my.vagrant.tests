@@ -45,3 +45,5 @@ Ryzen AI Max+ 395, 128 GB RAM. Documentazione e messaggi in italiano.
 - `zsvirt_1node_eval`
 - `k3s_1control_3workers`
 - `k8s_hacontrol_3workers`
+- `linux_4nodes`
+- `opnsense_4nodes_networks`

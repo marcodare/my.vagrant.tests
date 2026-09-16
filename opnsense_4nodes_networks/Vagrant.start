@@ -1,0 +1,80 @@
+# frozen_string_literal: true
+# Variante didattica: crea esclusivamente VM, NIC e dischi.
+# Non configura hostname, indirizzi IP, pacchetti o servizi nel guest; il nodo
+# opnsense resta un FreeBSD pulito da convertire seguendo STEPS.md.
+# Avvio: VAGRANT_VAGRANTFILE=Vagrant.start vagrant up
+
+require 'json'
+
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+Vagrant.configure('2') do |config|
+  # Il percorso basic non deve essere modificato da plugin opzionali dell'host.
+  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.boot_timeout = 900
+
+  spec.fetch('nodes').each_with_index do |node, index|
+    subnet = spec.fetch('subnet')
+    mac_id = spec.fetch('mac_id', subnet)
+    netmask = spec.fetch('netmask', '255.255.255.0')
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+    all_networks = spec.fetch('internal_networks')
+    # Reti interne del nodo: tutte per default, un sottoinsieme con "networks",
+    # nessuna con attach_internal=false. Stessa regola del Vagrantfile.
+    networks = if !node.fetch('attach_internal', true)
+                 []
+               elsif node.key?('networks')
+                 all_networks.select { |network| node.fetch('networks').include?(network.fetch('name')) }
+               else
+                 all_networks
+               end
+
+    config.vm.define node.fetch('name') do |vm|
+      vm.vm.box = node.fetch('box', spec.fetch('box'))
+      vm.vm.box_version = node.fetch('box_version', spec.fetch('box_version'))
+      # La box FreeBSD non garantisce bash: il communicator usa /bin/sh.
+      vm.ssh.shell = '/bin/sh' if node.fetch('role') == 'opnsense'
+
+      # NIC 1 resta NAT/DHCP per consentire vagrant ssh e il download pacchetti.
+      # NIC 2 è host-only. L'IP indica a VirtualBox il segmento da creare, ma
+      # auto_config=false impedisce a Vagrant di configurarlo dentro il guest.
+      vm.vm.network 'private_network', ip: address, netmask: netmask, auto_config: false
+
+      # NIC 3 e successive appartengono alle reti interne del laboratorio.
+      # Anche queste restano senza IP finché non si seguono gli esercizi.
+      networks.each do |network|
+        vm.vm.network 'private_network', ip: "#{network.fetch('prefix')}.#{node.fetch('host')}",
+          auto_config: false,
+          virtualbox__intnet: "#{spec.fetch('id')}-#{network.fetch('name')}"
+      end
+
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}-start"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        vb.gui = node.fetch('role') == 'opnsense'
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', 'off']
+        vb.customize ['modifyvm', :id, '--macaddress2', format('080027%02X%02X02', mac_id, index + 1)]
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+        networks.each_with_index do |_network, position|
+          slot = position + 3
+          vb.customize ['modifyvm', :id, "--macaddress#{slot}",
+                        format('080027%02X%02X%02X', mac_id, index + 1, slot)]
+          vb.customize ['modifyvm', :id, "--nicpromisc#{slot}", 'allow-all']
+        end
+      end
+
+      # Vagrant crea i supporti, ma non partiziona né formatta i dischi dati.
+      # Il disco della box FreeBSD resta com'è: OPNsense non ne ha bisogno.
+      vm.vm.disk :disk, size: '80GB', primary: true unless node.fetch('role') == 'opnsense'
+      if node['disk_gb']
+        vm.vm.disk :disk, size: "#{node.fetch('disk_gb')}GB",
+          name: "#{node.fetch('name')}-data"
+      end
+    end
+  end
+end

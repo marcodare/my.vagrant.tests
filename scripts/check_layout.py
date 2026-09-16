@@ -9,7 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.lab_config import HOSTONLY_POOL, load_spec, mac_address  # noqa: E402
+from scripts.lab_config import (  # noqa: E402
+    HOSTONLY_POOL,
+    load_spec,
+    mac_address,
+    node_networks,
+)
 
 
 def main() -> None:
@@ -41,6 +46,17 @@ def main() -> None:
             raise ValueError(f"STEPS mancante: {path}")
         if not manual.is_file():
             raise ValueError(f"Vagrant.start mancante: {path}")
+        vbguest_guard = (
+            "config.vbguest.auto_update = false "
+            "if Vagrant.has_plugin?('vagrant-vbguest')"
+        )
+        assisted_text = assisted.read_text(encoding="utf-8")
+        manual_text = manual.read_text(encoding="utf-8")
+        for definition, source in ((assisted, assisted_text), (manual, manual_text)):
+            if vbguest_guard not in source:
+                raise ValueError(
+                    f"Protezione da vagrant-vbguest mancante: {definition}"
+                )
         readme_text = readme.read_text(encoding="utf-8")
         if (
             "VAGRANT_VAGRANTFILE=Vagrant.start vagrant up" not in readme_text
@@ -50,22 +66,23 @@ def main() -> None:
         steps_text = steps.read_text(encoding="utf-8").lower()
         if "bare metal" not in steps_text or "vagrant.start" not in steps_text:
             raise ValueError(f"STEPS non portabile o senza percorso basic: {path}")
-        manual_text = manual.read_text(encoding="utf-8")
         if ".provision" in manual_text or "auto_config: false" not in manual_text:
             raise ValueError(f"Vagrant.start configura il guest: {path}")
         for index, node in enumerate(spec["nodes"], start=1):
-            required: tuple[str, ...] = (
-                () if node["role"] == "zsvirt" else ("base", node["role"])
-            )
+            # zsvirt è un'appliance senza provisioner; OPNsense ha solo il
+            # proprio, perché base.sh dei lab è pensato per guest Linux.
+            if node["role"] == "zsvirt":
+                required: tuple[str, ...] = ()
+            elif node["role"] == "opnsense":
+                required = ("opnsense",)
+            else:
+                required = ("base", node["role"])
             if node["role"] == "kvm" and spec.get("storage_backend"):
                 required += ("storage",)
             for script in required:
                 if not (path.parent / f"scripts/provision/{script}.sh").is_file():
                     raise ValueError(f"Provisioner mancante: {path}: {script}")
-            networks = (
-                spec["internal_networks"] if node.get("attach_internal", True) else []
-            )
-            for slot in range(2, 3 + len(networks)):
+            for slot in range(2, 3 + len(node_networks(spec, node))):
                 mac = mac_address(spec.get("mac_id", spec["subnet"]), index, slot)
                 if mac in macs:
                     raise ValueError(f"MAC duplicato: {mac}")

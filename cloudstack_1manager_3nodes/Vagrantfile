@@ -22,6 +22,10 @@ end.join(';')
 # '2' è la versione del formato di configurazione, non di VirtualBox.
 # do |config| ... end è un blocco Ruby: config raccoglie le opzioni comuni.
 Vagrant.configure('2') do |config|
+  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  # Evita che il plugin opzionale vagrant-vbguest modifichi il guest prima dei provisioner.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+
 
   # La box è l’immagine base del sistema operativo; versione e architettura
   # selezionano la variante da scaricare. amd64 è adatta al Bosgame Ryzen.

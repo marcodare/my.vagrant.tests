@@ -32,8 +32,10 @@ fi
 
 if command -v vagrant >/dev/null; then
   for lab in */lab.json; do
-    (cd "$(dirname "$lab")" && vagrant validate >/dev/null)
-    (cd "$(dirname "$lab")" && VAGRANT_VAGRANTFILE=Vagrant.start vagrant validate >/dev/null)
+    # È una verifica statica: non richiedere che il driver del provider sia
+    # caricato sull'host che esegue lint o CI.
+    (cd "$(dirname "$lab")" && vagrant validate --ignore-provider >/dev/null)
+    (cd "$(dirname "$lab")" && VAGRANT_VAGRANTFILE=Vagrant.start vagrant validate --ignore-provider >/dev/null)
   done
   echo 'OK: vagrant validate su entrambi i percorsi di ogni laboratorio.'
 else

@@ -8,6 +8,10 @@ require 'json'
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
 Vagrant.configure('2') do |config|
+  # Il percorso basic non deve essere modificato da plugin opzionali dell'host.
+  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+
   config.vm.box = spec.fetch('box')
   config.vm.box_version = spec.fetch('box_version')
   config.vm.box_architecture = 'amd64'

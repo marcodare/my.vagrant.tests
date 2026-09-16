@@ -1,0 +1,21 @@
+{
+  "id": "opnsense_4nodes_networks",
+  "subnet": 67,
+  "box": "bento/debian-13",
+  "box_version": "202510.26.0",
+  "versions": {
+    "opnsense": "26.1"
+  },
+  "internal_networks": [
+    {"name": "blue", "prefix": "10.67.1"},
+    {"name": "green", "prefix": "10.67.2"},
+    {"name": "dmz", "prefix": "10.67.3"}
+  ],
+  "nodes": [
+    {"name": "blue1", "role": "debian", "host": 11, "cpus": 2, "memory": 4096, "networks": ["blue"]},
+    {"name": "blue2", "role": "debian", "host": 12, "cpus": 2, "memory": 4096, "networks": ["blue"]},
+    {"name": "green1", "role": "debian", "host": 13, "cpus": 2, "memory": 4096, "networks": ["green"]},
+    {"name": "dmz1", "role": "debian", "host": 14, "cpus": 2, "memory": 4096, "networks": ["dmz"]},
+    {"name": "opnsense", "role": "opnsense", "host": 10, "cpus": 2, "memory": 4096, "box": "bento/freebsd-14.3", "box_version": "202510.26.0"}
+  ]
+}
