@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-vagrant up --provider=virtualbox
+VAGRANT_VAGRANTFILE=Vagrantfile vagrant up --provider=virtualbox

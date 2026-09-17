@@ -29,6 +29,7 @@ bind-address=127.0.0.1
 EOF
 systemctl restart mysql
 address=$(cat /var/lib/infra-lab/address)
+subnet=$(cat /var/lib/infra-lab/subnet)
 # Marker solo dopo successo. Non re-inizializzare un database già esistente.
 if [[ ! -f /var/lib/infra-lab/cloudstack-db-ready ]]; then
   if mysql -Nse "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='cloud'" | grep -qx cloud; then
@@ -57,7 +58,7 @@ SQL
 fi
 cloudstack-setup-management
 mkdir -p /srv/secondary
-echo '/srv/secondary 10.60.0.0/24(rw,async,no_root_squash,no_subtree_check)' > /etc/exports.d/infra-cloudstack.exports
+echo "/srv/secondary 10.$subnet.0.0/24(rw,async,no_root_squash,no_subtree_check)" > /etc/exports.d/infra-cloudstack.exports
 exportfs -ra
 systemctl enable --now nfs-kernel-server
 
@@ -66,24 +67,24 @@ echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/90-infra-router.conf
 sysctl --system >/dev/null
 nat=$(ip -4 route show default | awk 'NR==1 {print $5}')
 [[ -n $nat && $nat != cloudbr0 ]] || exit 1
-iptables -t nat -C POSTROUTING -s 192.168.60.0/24 -o "$nat" -j MASQUERADE 2>/dev/null ||
-  iptables -t nat -A POSTROUTING -s 192.168.60.0/24 -o "$nat" -j MASQUERADE
+iptables -t nat -C POSTROUTING -s "192.168.$subnet.0/24" -o "$nat" -j MASQUERADE 2>/dev/null ||
+  iptables -t nat -A POSTROUTING -s "192.168.$subnet.0/24" -o "$nat" -j MASQUERADE
 iptables -C FORWARD -i cloudbr1 -o "$nat" -j ACCEPT 2>/dev/null ||
   iptables -A FORWARD -i cloudbr1 -o "$nat" -j ACCEPT
 iptables -C FORWARD -i "$nat" -o cloudbr1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null ||
   iptables -A FORWARD -i "$nat" -o cloudbr1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -t nat -C POSTROUTING -s 10.60.0.0/24 -o "$nat" -j MASQUERADE 2>/dev/null ||
-  iptables -t nat -A POSTROUTING -s 10.60.0.0/24 -o "$nat" -j MASQUERADE
+iptables -t nat -C POSTROUTING -s "10.$subnet.0.0/24" -o "$nat" -j MASQUERADE 2>/dev/null ||
+  iptables -t nat -A POSTROUTING -s "10.$subnet.0.0/24" -o "$nat" -j MASQUERADE
 iptables -C FORWARD -i cloudbr0 -o "$nat" -j ACCEPT 2>/dev/null ||
   iptables -A FORWARD -i cloudbr0 -o "$nat" -j ACCEPT
 iptables -C FORWARD -i "$nat" -o cloudbr0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null ||
   iptables -A FORWARD -i "$nat" -o cloudbr0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 netfilter-persistent save
-cat > /etc/dnsmasq.d/infra-lab.conf <<'EOF'
+cat > /etc/dnsmasq.d/infra-lab.conf <<EOF
 interface=cloudbr0
 interface=cloudbr1
 bind-dynamic
-listen-address=192.168.60.10,10.60.0.10
+listen-address=192.168.$subnet.10,10.$subnet.0.10
 no-resolv
 server=1.1.1.1
 server=8.8.8.8

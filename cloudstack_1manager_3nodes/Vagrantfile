@@ -62,15 +62,12 @@ Vagrant.configure('2') do |config|
     # Con internal_networks vuoto, extras è una stringa vuota.
     extras = spec.fetch('internal_networks').each_with_index.map do |net, n|
       nic_mac = format('080027%02X%02X%02X', subnet, index + 1, n + 3).scan(/../).join(':').downcase
-      "#{nic_mac},#{net.fetch('prefix')}.#{node.fetch('host')},vmbr#{n + 1}"
+      "#{nic_mac},#{net.fetch('prefix')}.#{node.fetch('host')},cloudbr#{n}"
     end.join(';')
 
     # 4. CONFIGURAZIONE DEL SINGOLO NODO
-    # define assegna il nome usato da comandi come vagrant ssh pve1.
-    # vm.vm.hostname imposta invece il nome del sistema operativo guest.
+    # define assegna il nome usato da comandi come vagrant ssh manager.
     config.vm.define node.fetch('name') do |vm|
-      vm.vm.hostname = node.fetch('name')
-
       # NIC 1: NAT tecnica gestita da Vagrant per SSH e download.
       # NIC 2: fake public host-only su cloudbr1; NIC 3 privata su cloudbr0.
       # auto_config: false lascia IP e bridge nel guest a scripts/provision/base.sh;
@@ -99,10 +96,8 @@ Vagrant.configure('2') do |config|
         # :id viene sostituito da Vagrant con l’identificatore reale della VM.
         vb.customize ['modifyvm', :id, '--macaddress2', mac]
 
-        # Espone la virtualizzazione hardware ai soli nodi PVE/KVM: potranno
-        # eseguire altre VM al loro interno. PBS e manager non ne hanno bisogno.
-        # %w[pve kvm] è una lista Ruby; condizione ? 'on' : 'off' sceglie il valore.
-        vb.customize ['modifyvm', :id, '--nested-hw-virt', %w[pve kvm].include?(node.fetch('role')) ? 'on' : 'off']
+        # Espone la virtualizzazione hardware soltanto ai nodi KVM.
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', node.fetch('role') == 'kvm' ? 'on' : 'off']
 
         # La modalità promiscua permette alla NIC di ricevere anche frame per
         # i MAC delle VM annidate collegate al bridge del nodo.
@@ -133,15 +128,13 @@ Vagrant.configure('2') do |config|
       # Vagrant esegue gli script nell’ordine dichiarato, di default con sudo.
       # base.sh riceve: ruolo, hostname, IP management, MAC NIC 2, reti extra, subnet.
       # Prepara hostname, pacchetti comuni e reti; lo script successivo installa
-      # il ruolo indicato in lab.json (pve, pbs, manager oppure kvm).
+      # il ruolo indicato in lab.json (manager oppure kvm).
       # I percorsi sono locali a questo laboratorio, senza import condivisi.
       vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
         args: [node.fetch('role'), node.fetch('name'), address, mac.scan(/../).join(':').downcase, extras, subnet.to_s, lab_hosts]
 
       # Il provisioning parte al primo up, oppure con vagrant provision/--provision.
-      # Per PVE, scripts/up.sh coordina anche reload e secondo provisioning per
-      # avviare il kernel PVE prima di completare l’installazione dello stack.
-      # Cluster, pool e altre operazioni didattiche sono spiegati nel README.
+      # Zona, storage e altre operazioni didattiche sono spiegati nel README.
       # Versione software richiesta dal lab.json, distinta dalla versione della box.
       vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh",
         args: [spec.fetch('versions').fetch(node.fetch('role'))]

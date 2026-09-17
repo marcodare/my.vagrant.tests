@@ -1,18 +1,21 @@
 # cloudstack_1manager_3nodes
 
-Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Per studiare tutto a mano usare `Vagrantfile.start` e seguire [STEPS.md](STEPS.md).
 Il `Vagrantfile` mantiene il percorso assistito già disponibile.
 
 ## Due percorsi di avvio
 
 ```bash
 ./scripts/up.sh                                      # assistito
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh manager
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh manager
 ```
 
-Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
-`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+`Vagrantfile.start` dichiara le stesse box, VM, risorse, NIC, MAC, impostazioni
+VirtualBox e dischi del percorso assistito, ma non contiene provisioner e non
+configura il guest. Usare la variabile anche per `status`, `ssh`, `halt`, `up`
+e `destroy`. I due file condividono `.vagrant`: non alternarli sulle stesse
+istanze.
 
 Un manager e tre KVM annidati su Ubuntu 22.04 / CloudStack 4.23. Due reti del
 laboratorio, oltre alla NIC NAT tecnica Vagrant. Cartella autonoma: Vagrantfile,
@@ -123,8 +126,10 @@ agli apparati CloudStack. Le reti guest hanno subnet distinte, per esempio
    i nuovi lab distribuiti per confrontare il comportamento.
 
 Spegnere istanze/System VM dalla UI, poi `vagrant halt`. Riprendere con
-`vagrant up manager` seguito da `vagrant up kvm1 kvm2 kvm3`.
-Collaudo end-to-end sul Bosgame ancora da eseguire.
+`vagrant up manager` seguito da `vagrant up kvm1 kvm2 kvm3`. Nel percorso
+manuale anteporre sempre `VAGRANT_VAGRANTFILE=Vagrantfile.start`. Per cambiare
+percorso distruggere prima le istanze usando la definizione con cui sono state
+create. Il collaudo end-to-end sul Bosgame è ancora da eseguire.
 
 Fonti: [KVM](https://docs.cloudstack.apache.org/en/4.23.0.0/installguide/hypervisor/kvm.html),
 [reti](https://docs.cloudstack.apache.org/en/4.23.0.0/adminguide/networking.html).

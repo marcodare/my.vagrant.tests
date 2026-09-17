@@ -7,7 +7,10 @@ apt-get install -y software-properties-common "linux-headers-$(uname -r)" lvm2
 add-apt-repository -y ppa:linbit/linbit-drbd9-stack
 apt-get update
 apt-get install -y drbd-dkms drbd-utils linstor-controller linstor-satellite linstor-client drbd-reactor resource-agents nfs-kernel-server
-modprobe drbd
+modprobe drbd || {
+  echo 'Modulo DRBD non caricabile: verificare DKMS, header e Secure Boot; riavviare se necessario.' >&2
+  exit 1
+}
 modinfo -F version drbd | grep -q '^9\.' || { echo 'Richiesto DRBD 9: riavviare dopo installazione DKMS'; exit 1; }
 systemctl enable --now linstor-satellite
 # Il controller verrà avviato prima su kvm1, poi gestito da DRBD Reactor.

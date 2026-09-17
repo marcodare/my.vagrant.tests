@@ -1,18 +1,21 @@
 # cloudstack_HAmanager_3nodes_ceph
 
-Per studiare tutto a mano usare `Vagrant.start` e seguire [STEPS.md](STEPS.md).
+Per studiare tutto a mano usare `Vagrantfile.start` e seguire [STEPS.md](STEPS.md).
 Il `Vagrantfile` mantiene il percorso assistito già disponibile.
 
 ## Due percorsi di avvio
 
 ```bash
 ./scripts/up.sh                                      # assistito
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant up        # basic/manuale
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh mgmt1
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up        # basic/manuale
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh mgmt1
 ```
 
-Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
-`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+`Vagrantfile.start` dichiara le stesse box, VM, risorse, NIC, MAC, impostazioni
+VirtualBox e dischi del percorso assistito, ma non contiene provisioner e non
+configura il guest. Usare la variabile anche per `status`, `ssh`, `halt`, `up`
+e `destroy`. I due file condividono `.vagrant`: non alternarli sulle stesse
+istanze.
 
 Versione richiesta: **CloudStack 4.23** (patch del ramo consentite).
 
@@ -71,4 +74,7 @@ dell'unico Bosgame/SSD; connessioni NAT in corso possono cadere al cambio gatewa
 Seguire il runbook per spegnere workload e cluster in ordine, poi `vagrant halt`.
 Alla ripresa attendere quorum storage e DB prima di riavviare i manager.
 `vagrant destroy` elimina tutti i dischi e database: usarlo solo per reset voluto.
-Non serve distruggere questo lab per passare a un altro.
+Nel percorso manuale anteporre sempre
+`VAGRANT_VAGRANTFILE=Vagrantfile.start`. Per cambiare percorso distruggere prima
+con la definizione usata per creare le istanze. Per passare a un altro lab basta
+invece arrestare ordinatamente questo, senza distruggerlo.
