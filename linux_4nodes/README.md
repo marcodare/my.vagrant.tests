@@ -1,9 +1,10 @@
 # Linux: quattro distribuzioni in rete
 
 Laboratorio semplice per confrontare quattro distribuzioni Linux collegate da
-una sola rete: quattro VM, 16 GiB RAM, nessun servizio preinstallato. Serve per
-esercizi di rete, pacchetti, firewall, SELinux/AppArmor, SSH e strumenti di
-amministrazione a confronto fra famiglie Debian e Enterprise Linux.
+una sola rete: quattro VM, 16 GiB RAM e nessun servizio applicativo aggiunto.
+Il percorso assistito installa soltanto chrony e strumenti di amministrazione.
+Serve per esercizi di rete, pacchetti, firewall, SELinux/AppArmor, SSH e
+confronto fra famiglie Debian ed Enterprise Linux.
 
 | Nodo | Sistema | Box Bento | Rete del lab |
 | --- | --- | --- | --- |
@@ -14,7 +15,9 @@ amministrazione a confronto fra famiglie Debian e Enterprise Linux.
 
 Ogni nodo ha 2 vCPU, 4 GiB RAM e disco OS da 80 GB. NIC 1 è NAT per `vagrant
 ssh` e download; NIC 2 è la rete host-only `192.168.66.0/24`, raggiungibile
-anche dal Bosgame. Non ci sono reti interne né virtualizzazione annidata.
+dal Bosgame ma non direttamente dagli altri computer della LAN senza routing o
+tunnel attraverso il Bosgame. Non ci sono reti interne né virtualizzazione
+annidata.
 
 Le box hanno versioni diverse perché non esiste una release Bento comune:
 Ubuntu 26.04 è pubblicata solo dalla 202606.01.0. Ogni box è fissata per nodo
@@ -32,9 +35,11 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh rocky10
 
 Il `Vagrantfile` imposta hostname, `/etc/hosts`, l'IP sulla NIC del lab, NTP e
 alcuni strumenti di rete (`tcpdump`, `iperf3`, `traceroute`, `nc`, `dig`).
-`Vagrantfile.start` lascia la NIC del lab senza indirizzo: la configurazione è
-l'esercizio descritto in [STEPS.md](STEPS.md). Usare la variabile anche per
-`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+`Vagrantfile.start` usa la stessa definizione di VM, NIC, MAC, risorse e disco,
+ma non dichiara gli script di provisioning: la NIC del lab resta quindi senza
+indirizzo e la configurazione è l'esercizio descritto in [STEPS.md](STEPS.md).
+Usare la variabile anche per `status`, `ssh`, `halt`, `up` e `destroy`. I due
+file condividono `.vagrant`: non alternarli sulle stesse istanze.
 
 ## Operazioni
 

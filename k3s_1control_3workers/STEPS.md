@@ -8,19 +8,102 @@ a hostname, NIC, DNS e regole firewall, mantenendo una route verso Internet e
 NTP stabile. Su bare metal verificare anche MTU, ridondanza switch e dischi.
 Il passo Vagrant seguente si salta; la configurazione parte dall'inventario rete.
 
+`Vagrantfile.start` usa le stesse box, VM, CPU, RAM, NIC, MAC, disco da 80 GB e
+forwarding API del percorso assistito, ma non configura nulla nel guest. I due
+file condividono `.vagrant`: non alternarli sulle stesse istanze.
+
 ## 1. Avvio e rete
 
-Avviare con `VAGRANT_VAGRANTFILE=Vagrant.start vagrant up`. Su ogni nodo usare
-`ip -br link` e i MAC mostrati da `VBoxManage showvminfo` per identificare NIC 2
-e NIC 3. Impostare hostname, `/etc/hosts`, IP management `192.168.64.<host>/24`
-e IP cluster `10.64.0.<host>/24`; lasciare il gateway predefinito sulla NIC NAT.
-Verificare da ogni nodo `ping 10.64.0.10` e gli altri indirizzi cluster.
+Avviare e mantenere la variabile in ogni comando:
+
+```bash
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant status
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh control1
+```
+
+Inventariare `ip -br link`, `ip -br address`, `ip route`, `lsblk` e `df -hT`.
+La NIC 1 NAT deve conservare DHCP e default route; NIC 2 e NIC 3 devono essere
+presenti ma prive di IPv4. Identificarle tramite i MAC deterministici:
+
+| Nodo | MAC management | MAC cluster |
+| --- | --- | --- |
+| `control1` | `08:00:27:42:01:02` | `08:00:27:42:01:03` |
+| `worker1` | `08:00:27:42:02:02` | `08:00:27:42:02:03` |
+| `worker2` | `08:00:27:42:03:02` | `08:00:27:42:03:03` |
+| `worker3` | `08:00:27:42:04:02` | `08:00:27:42:04:03` |
+
+Su ciascun nodo impostare il proprio hostname e creare un netplan analogo al
+seguente, sostituendo MAC e suffisso IP:
+
+```bash
+sudo hostnamectl set-hostname control1
+sudoedit /etc/netplan/60-infra-lab.yaml
+```
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enpmgmt:
+      match: {macaddress: "08:00:27:42:01:02"}
+      set-name: enpmgmt
+      addresses: [192.168.64.10/24]
+    enpcluster:
+      match: {macaddress: "08:00:27:42:01:03"}
+      set-name: enpcluster
+      addresses: [10.64.0.10/24]
+      link-local: []
+```
+
+```bash
+sudo chmod 0600 /etc/netplan/60-infra-lab.yaml
+sudo netplan generate
+sudo netplan try
+sudo netplan apply
+```
+
+Non configurare gateway o DNS sulle due NIC del lab. Inserire su tutti i nodi:
+
+```text
+# BEGIN K3S LAB
+10.64.0.10 control1
+10.64.0.21 worker1
+10.64.0.22 worker2
+10.64.0.23 worker3
+# END K3S LAB
+```
+
+Verificare una sola default route sulla NAT, risoluzione dei quattro nomi e
+ping completi sulla rete `10.64.0.0/24`. Dal Bosgame gli IP management sono
+raggiungibili; la rete cluster resta interna a VirtualBox.
 
 ## 2. Prerequisiti
 
-Su tutti i nodi abilitare `overlay`, `br_netfilter`, forwarding IPv4 e bridge
-netfilter. Installare `curl`, sincronizzare l'orologio e verificare che ogni
-hostname risolva sull'indirizzo `10.64.0.x`.
+Su tutti i nodi installare i pacchetti minimi e rendere persistenti moduli e
+sysctl:
+
+```bash
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl chrony
+sudo systemctl enable --now chrony
+cat <<'EOF' | sudo tee /etc/modules-load.d/kubernetes.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay
+sudo modprobe br_netfilter
+cat <<'EOF' | sudo tee /etc/sysctl.d/90-kubernetes.conf
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+sudo sysctl --system
+```
+
+Verificare `chronyc tracking`, `lsmod`, i tre valori `sysctl` e la risoluzione
+di ogni hostname sull'indirizzo `10.64.0.x`. Se è attivo un firewall, consentire
+almeno API TCP 6443, kubelet TCP 10250 e Flannel VXLAN UDP 8472 fra i nodi.
 
 ## 3. Server
 
@@ -52,7 +135,7 @@ sostituire `enpcluster`. Fuori da questo host, sostituire gli indirizzi dei
 Generare i kubeconfig per host e Mac (dalla cartella del lab, sul Bosgame):
 
 ```bash
-./scripts/kubeconfig.sh
+VAGRANT_VAGRANTFILE=Vagrantfile.start ./scripts/kubeconfig.sh
 ```
 
 ## 4. Worker
@@ -70,12 +153,34 @@ curl -sfL https://get.k3s.io | sudo INSTALL_K3S_VERSION='v1.36.4+k3s1' \
 Cambiare l'ultimo ottetto per worker2 e worker3. Dal control verificare nodi,
 pod di sistema, DNS, Traefik e local-path storage con `kubectl get ... -A`.
 
-## 5. Esercizi
+## 5. Verifiche e fault test
 
 Creare un Deployment con almeno tre repliche, un Service, una NetworkPolicy e
 un volume. Spegnere un worker e osservare rescheduling e tempi di recupero.
 Studiare backup/restore e rotazione della cifratura dei Secret. Prima di fermare
-il lab usare `kubectl drain` sui worker; poi `vagrant halt`.
+il lab usare `kubectl drain` sui worker.
+
+```bash
+sudo k3s kubectl get nodes -o wide
+sudo k3s kubectl get pods -A -o wide
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant halt worker3
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up worker3
+```
+
+Attendere che il nodo torni `Ready`; con il solo `control1` spento API e
+scheduling non sono disponibili, perché questo non è un control plane HA.
+
+## Arresto e reset
+
+```bash
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant halt
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant destroy
+```
+
+`destroy` elimina in modo irreversibile cluster e volumi locali. Per passare al
+percorso assistito, distruggere prima usando ancora `Vagrantfile.start`, poi avviare
+senza la variabile.
 
 Fonti: [requisiti K3s](https://docs.k3s.io/installation/requirements),
 [opzioni server](https://docs.k3s.io/cli/server) e

@@ -1,7 +1,8 @@
 # proxmox_3nodes_networks
 
 Per studiare tutto a mano usare `Vagrantfile.start` e seguire [STEPS.md](STEPS.md).
-Il `Vagrantfile` mantiene il percorso assistito già disponibile.
+Il file basic dichiara le stesse box, VM, risorse, NIC, MAC e dischi del
+`Vagrantfile`, ma non contiene alcun provisioner del guest.
 
 ## Due percorsi di avvio
 
@@ -12,7 +13,8 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
 ```
 
 Nel percorso basic continuare con STEPS.md. Usare la variabile anche per
-`status`, `halt` e `destroy`; non alternare i due file sulle stesse VM.
+`status`, `ssh`, `halt`, `up` e `destroy`. I due file condividono `.vagrant`:
+non alternarli sulle stesse istanze.
 
 Versioni richieste: **Proxmox VE 9.2**.
 Patch consentite nel ramo indicato; selezione in `lab.json` e pin APT nel guest.
@@ -37,6 +39,8 @@ Ogni nodo ha disco OS 80 GB e NIC NAT tecnica. Il bridge management `vmbr0`
 usa 192.168.57.0/24 host-only, senza gateway. UI PVE:
 https://192.168.57.11:8006, https://192.168.57.12:8006,
 https://192.168.57.13:8006.
+Gli indirizzi host-only sono raggiungibili dal Bosgame, non direttamente dagli
+altri computer della LAN senza routing o tunnel attraverso il Bosgame.
 
 ## Avvio
 
@@ -74,7 +78,11 @@ vagrant destroy          # distruttivo: elimina nodi, dischi e VM annidate
 Dopo un destroy ripartire da `./scripts/up.sh`. `data/`, `disks/`, `logs/` sono
 spazi locali esclusi da Git; i dischi del provider sono gestiti da VirtualBox.
 Non rilanciare provisioning dopo modifiche didattiche alle reti senza voler
-ripristinare il layout di base. Collaudo sul Bosgame ancora da eseguire.
+ripristinare il layout di base. Il collaudo end-to-end multinodo resta da
+eseguire: sul mononodo di riferimento VirtualBox 7.2.18 con nested AMD-V ha
+mostrato uno stall del clock dopo circa due minuti. Disabilitare
+`virt-vmsave-vmload` non lo ha risolto; verificare stabilità e log VirtualBox
+prima di creare cluster o guest annidati.
 
 ## Reti ed esercizi
 

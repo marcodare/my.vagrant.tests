@@ -7,7 +7,7 @@ Ryzen AI Max+ 395, 128 GB RAM. Documentazione e messaggi in italiano.
 - Ogni laboratorio è indipendente; mantenere nomi VM, MAC e reti distinti.
 - Ogni lab contiene due definizioni autonome, senza dipendenze da shared/:
   - `Vagrantfile`: percorso assistito con i provisioner previsti dal laboratorio;
-  - `Vagrant.start`: percorso basic che crea soltanto VM, NIC e dischi, senza
+  - `Vagrantfile.start`: percorso basic che crea soltanto VM, NIC e dischi, senza
     configurare hostname, IP, pacchetti, cluster o servizi nel guest.
 - Ogni README descrive scopo, topologia, risorse, reti, versioni, entrambi i
   metodi di avvio, arresto, reset e limiti del laboratorio.
@@ -16,7 +16,7 @@ Ryzen AI Max+ 395, 128 GB RAM. Documentazione e messaggi in italiano.
   configurazione, verifiche, fault test e riferimenti; deve essere utilizzabile
   anche su VM generiche o bare metal adattando IP, NIC, dischi e gateway.
 - Il percorso basic si avvia con
-  `VAGRANT_VAGRANTFILE=Vagrant.start vagrant up`. Usare la stessa variabile per
+  `VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up`. Usare la stessa variabile per
   tutti i comandi Vagrant e non alternare i due percorsi sulle stesse istanze.
 - Preferire Python per strumenti e validazione; Ruby solo per la DSL obbligatoria di Vagrant.
 - Una sola infrastruttura accesa alla volta; le altre restano spente.

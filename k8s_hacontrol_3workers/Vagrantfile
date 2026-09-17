@@ -35,7 +35,6 @@ Vagrant.configure('2') do |config|
     cluster_mac = format('080027%02X%02X03', mac_id, index + 1)
 
     config.vm.define node.fetch('name') do |vm|
-      vm.vm.hostname = node.fetch('name')
       # NIC 1 NAT; NIC 2 management/API; NIC 3 traffico cluster ed etcd.
       vm.vm.network 'private_network', ip: address, auto_config: false
       vm.vm.network 'private_network', ip: cluster_address, auto_config: false,

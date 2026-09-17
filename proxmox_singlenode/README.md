@@ -21,6 +21,9 @@ possono comunicare con il Bosgame sul segmento, ma non hanno Internet senza un
 router/NAT aggiunto esplicitamente.
 
 UI PVE: `https://192.168.68.11:8006`. Il certificato è autofirmato.
+La rete è host-only: l'indirizzo è raggiungibile dal Bosgame, non direttamente
+dagli altri computer della LAN. Da remoto usare routing esplicito oppure un
+tunnel SSH verso il Bosgame.
 
 ## Prerequisiti
 
@@ -66,9 +69,10 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
 ```
 
-Questo percorso crea solo VM, NIC e disco. Non imposta hostname o IP e non
-esegue provisioner nel guest. Continuare con [STEPS.md](STEPS.md) e mantenere la
-variabile in tutti i comandi `status`, `ssh`, `halt`, `up` e `destroy`.
+Questo percorso usa la stessa definizione di VM, NIC, MAC, risorse e disco del
+percorso assistito, ma non dichiara gli script di provisioning. Non imposta
+quindi hostname o IP nel guest. Continuare con [STEPS.md](STEPS.md) e mantenere
+la variabile in tutti i comandi `status`, `ssh`, `halt`, `up` e `destroy`.
 
 Non alternare i due Vagrantfile sulle stesse istanze. Per cambiare percorso,
 distruggere esplicitamente l'istanza con lo stesso `VAGRANT_VAGRANTFILE` usato
@@ -116,9 +120,12 @@ riparte con `./scripts/up.sh`.
   diagnostico per evitare reset causati da pause del guest.
 - La virtualizzazione è annidata (`VirtualBox -> PVE/KVM -> guest`): prestazioni
   e timing non rappresentano il bare metal.
-- Il percorso assistito è stato collaudato sul Bosgame fino a provisioning,
-  reload, rete, `/dev/kvm`, storage e UI. Restano da provare il percorso basic
-  e l'esecuzione di una VM annidata.
+- Il percorso assistito ha completato provisioning, reload, rete, `/dev/kvm`,
+  storage e UI, ma con VirtualBox 7.2.18 e nested AMD-V il clock si è poi
+  bloccato dopo circa due minuti (`TM: Giving up catch-up attempt`). Il test con
+  `virt-vmsave-vmload=off` non ha risolto; con nested AMD-V disabilitato il boot
+  resta stabile ma `/dev/kvm` scompare. Il lab non è quindi ancora dichiarato
+  operativo per VM annidate su questa combinazione host/hypervisor.
 
 `data/`, `disks/` e `logs/` sono spazi locali esclusi da Git. I dischi gestiti
 da Vagrant restano nella directory del provider e non vanno spostati a mano.

@@ -1,9 +1,10 @@
 # Percorso manuale: Proxmox con Ceph
 
-`Vagrantfile.start` clona `local/proxmox-ve-9.2` e crea NIC e dischi, senza
-provisioning del guest. PVE 9.2 è già presente; identità dei nodi, rete,
-cluster e Ceph sono l'esercizio. Su VM generiche o bare metal partire da PVE
-9.2 standalone, oppure installarlo su Debian 13 seguendo
+`Vagrantfile.start` usa le stesse box, VM, risorse, NIC, MAC e dischi del
+percorso assistito, senza dichiarare provisioner del guest. PVE 9.2 è già
+presente; identità dei nodi, rete, cluster e Ceph sono l'esercizio. Su VM
+generiche o bare metal partire da PVE 9.2 standalone, oppure installarlo su
+Debian 13 seguendo
 [docs/proxmox.md](docs/proxmox.md). Non usare mai il disco OS come OSD.
 
 ## 1. Avvio, inventario e identità
@@ -13,6 +14,9 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant status
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
 ```
+
+Usare la variabile per ogni comando: i due file condividono `.vagrant` e senza
+di essa Vagrant può caricare il percorso assistito sulle stesse macchine.
 
 Su ciascun nodo verificare `pveversion`, un kernel `-pve`, assenza di
 `/etc/pve/corosync.conf` e assenza di guest. Identificare NIC e disco OSD
@@ -56,9 +60,11 @@ correttamente inizializzate.
 Sui cloni VirtualBox, con i servizi HA fermi, rendere solo diagnostico il
 watchdog `softdog` (timeout 10 s, che resetta il guest se il host lo congela
 più a lungo): `options softdog soft_noboot=1` in
-`/etc/modprobe.d/infra-lab-softdog.conf`, poi `systemctl stop watchdog-mux`,
-`modprobe -r softdog`, `systemctl start watchdog-mux`. Il fencing HA resta un
-esercizio di comportamento; vedere `proxmox_3nodes_simple/STEPS.md`.
+`/etc/modprobe.d/infra-lab-softdog.conf`; fermare prima `pve-ha-lrm`,
+`pve-ha-crm` e `watchdog-mux`, ricaricare `softdog`, riavviare `watchdog-mux` e
+attendere in `dmesg` `soft_noboot=1`, quindi riavviare i due servizi HA. Il
+fencing resta un esercizio di comportamento; vedere
+`proxmox_3nodes_simple/STEPS.md`.
 
 ## 2. Rete e cluster PVE
 
@@ -73,6 +79,12 @@ Creare:
 
 `vmbr1` non deve avere gateway. Dopo `sudo ifreload -a`, controllare indirizzi,
 route, DNS, NTP e connettività completa tra i tre nodi su entrambe le reti.
+Prima del cluster lasciare i nodi accesi per alcuni minuti e verificare più
+volte SSH, data e UI. Sul mononodo di riferimento VirtualBox 7.2.18 con nested
+AMD-V ha prodotto `TM: Giving up catch-up attempt` e uno stall di circa 60
+secondi. `virt-vmsave-vmload=off` non ha risolto; nested AMD-V disabilitato
+elimina `/dev/kvm` e non è una soluzione valida. Fermarsi e conservare
+`VBox.log` se il difetto ricompare.
 Creare quindi il cluster `study` su `pve1` e aggiungere gli altri nodi:
 
 ```bash
@@ -119,3 +131,5 @@ Per eliminare l'ambiente manuale usare la stessa variabile:
 ```bash
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant destroy
 ```
+
+Solo dopo il destroy avviare il percorso assistito senza la variabile.

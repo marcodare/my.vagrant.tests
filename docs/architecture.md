@@ -133,7 +133,7 @@ Ogni cartella è un'unità condivisibile e contiene quattro ingressi obbligatori
 | File | Responsabilità |
 | --- | --- |
 | `Vagrantfile` | Percorso assistito con provisioning locale |
-| `Vagrant.start` (oppure `Vagrantfile.start`) | Solo VM, NIC e dischi; nessun provisioning del guest |
+| `Vagrantfile.start` | Solo VM, NIC e dischi; nessun provisioning del guest |
 | `README.md` | Scopo, topologia, versioni, avvio/arresto e limiti |
 | `STEPS.md` | Installazione manuale completa da OS pulito, anche fuori da Vagrant |
 
@@ -144,8 +144,9 @@ per procurarsi macchine non configurate su VirtualBox; la box può già contener
 il prodotto di base, come avviene per Proxmox VE.
 
 1. Creare cartella descrittiva e scegliere subnet/MAC non sovrapposte.
-2. Copiare e modificare `Vagrantfile` e il file basic (`Vagrant.start` oppure
-   `Vagrantfile.start`), entrambi autonomi, e definire `lab.json`.
+2. Copiare e modificare `Vagrantfile` e `Vagrantfile.start`, entrambi autonomi,
+   e definire `lab.json`. `Vagrant.start` è un nome legacy da migrare quando si
+   revisiona il laboratorio.
 3. Mantenere tutti i provisioner nella cartella del lab; nessun import da shared/.
 4. Documentare risorse e limiti nel README; configurazione manuale ed esercizi in STEPS.md.
 5. Aggiornare README, validatore del layout e la tabella delle reti.

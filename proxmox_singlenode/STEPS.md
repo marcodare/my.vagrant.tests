@@ -2,9 +2,10 @@
 
 Questa è la procedura autorevole per ottenere un singolo nodo Proxmox VE 9.2
 standalone. Con Vagrant si parte dalla box `local/proxmox-ve-9.2`, nella quale
-PVE e il kernel sono già installati; `Vagrantfile.start` crea esclusivamente VM,
-NIC e disco. Le sezioni dedicate a Debian 13 permettono di adattare la stessa
-procedura a una VM generica o al bare metal.
+PVE e il kernel sono già installati; `Vagrantfile.start` usa la stessa
+definizione di VM, NIC, MAC, risorse e disco del percorso assistito, ma non
+dichiara gli script di provisioning. Le sezioni dedicate a Debian 13 permettono
+di adattare la stessa procedura a una VM generica o al bare metal.
 
 Il risultato non è un cluster: non creare Corosync e non eseguire `pvecm create`.
 L'obiettivo è verificare il singolo hypervisor prima di aggiungere complessità.
@@ -53,8 +54,10 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant status
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh pve1
 ```
 
-Usare la stessa variabile per ogni comando di questo percorso. Senza variabile
-Vagrant seleziona il percorso assistito, che rappresenta un'istanza distinta.
+Usare la stessa variabile per ogni comando di questo percorso. I due file
+condividono la directory di stato `.vagrant`: senza la variabile Vagrant carica
+la definizione assistita e può operare sulla stessa macchina con i provisioner
+dichiarati da quel file.
 
 ## 3. Rilevare lo stato iniziale
 
@@ -148,7 +151,9 @@ sudo systemctl stop pve-ha-lrm pve-ha-crm
 sudo systemctl stop watchdog-mux
 sudo modprobe -r softdog
 sudo systemctl start watchdog-mux
-sudo dmesg | grep 'softdog: initialized'
+sudo timeout 10 bash -c \
+  "until dmesg | grep 'softdog: initialized. soft_noboot=1' >/dev/null; do sleep 0.2; done"
+sudo systemctl start pve-ha-crm pve-ha-lrm
 ```
 
 Il log deve contenere `soft_noboot=1`. Non applicare questa modifica su bare
@@ -436,7 +441,9 @@ Reset distruttivo, solo quando si vogliono perdere nodo e guest annidati:
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant destroy
 ```
 
-Non alternare il file manuale e quello assistito sulla stessa istanza.
+Non alternare il file manuale e quello assistito sulla stessa istanza: entrambi
+condividono lo stato `.vagrant`. Per cambiare percorso, distruggere la macchina
+con la stessa definizione usata per crearla e avviare poi l'altro percorso.
 
 ## Riferimenti
 

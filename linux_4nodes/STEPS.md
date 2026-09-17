@@ -26,7 +26,9 @@ Al termine ogni VM avrà:
 La rete `192.168.66.0/24` non ha un gateway: serve soltanto per il traffico fra
 i nodi e fra i nodi e il Bosgame. La default route deve rimanere sulla NIC NAT;
 in questo modo la rete didattica non modifica il percorso usato per scaricare i
-pacchetti e non diventa accidentalmente una seconda uscita verso Internet.
+pacchetti e non diventa accidentalmente una seconda uscita verso Internet. Gli
+indirizzi host-only non sono raggiungibili direttamente dagli altri computer
+della LAN senza routing o tunnel attraverso il Bosgame.
 
 ## Prerequisiti e cautele
 
@@ -54,14 +56,16 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
 VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant status
 ```
 
-`Vagrantfile.start` crea soltanto VM, NIC e dischi. L'opzione
+`Vagrantfile.start` usa la stessa definizione di VM, NIC, MAC, risorse e dischi
+del percorso assistito, ma non dichiara gli script di provisioning. L'opzione
 `auto_config: false` fa creare a VirtualBox la seconda scheda, ma impedisce a
 Vagrant di assegnarle l'IP nel guest. Questo lascia visibile ogni passaggio che
 nei laboratori reali va compreso e verificato.
 
 Usare `VAGRANT_VAGRANTFILE=Vagrantfile.start` anche per tutti i successivi
-comandi `ssh`, `halt`, `reload` e `destroy`. Senza la variabile Vagrant usa il
-percorso assistito e considera le macchine come un ambiente differente.
+comandi `ssh`, `halt`, `reload` e `destroy`. I due file condividono la directory
+di stato `.vagrant`: senza la variabile Vagrant carica la definizione assistita
+e può operare sulle stesse macchine con i provisioner dichiarati da quel file.
 
 Accedere al primo nodo:
 
@@ -104,7 +108,7 @@ Verificare che corrisponda alla tabella precedente. Dal Bosgame si può fare un
 controllo indipendente con:
 
 ```bash
-VBoxManage showvminfo linux_4nodes-ubuntu24-start
+VBoxManage showvminfo linux_4nodes-ubuntu24
 ```
 
 ## 3. Impostare hostname e risoluzione locale
@@ -436,9 +440,10 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant destroy
 ```
 
 `destroy` è distruttivo e richiede conferma. Non alternare questo file con il
-`Vagrantfile` assistito sulle stesse istanze. Per cambiare percorso, salvare gli
-appunti, distruggere esplicitamente le VM con la stessa variabile usata per
-crearle e avviare poi l'altro percorso.
+`Vagrantfile` assistito sulle stesse istanze: entrambi condividono lo stato
+`.vagrant`. Per cambiare percorso, salvare gli appunti, distruggere
+esplicitamente le VM con la stessa variabile usata per crearle e avviare poi
+l'altro percorso.
 
 ## Riferimenti
 

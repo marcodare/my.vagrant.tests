@@ -36,7 +36,6 @@ Vagrant.configure('2') do |config|
     config.vm.define node.fetch('name') do |vm|
       vm.vm.box = node.fetch('box')
       vm.vm.box_version = node.fetch('box_version')
-      vm.vm.hostname = node.fetch('name')
       # NIC 1 NAT per SSH e pacchetti; NIC 2 host-only, la rete del laboratorio.
       vm.vm.network 'private_network', ip: address, auto_config: false
 

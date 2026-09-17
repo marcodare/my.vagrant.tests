@@ -2,8 +2,9 @@
 
 Con Vagrant questa procedura parte da tre cloni non configurati della box
 `local/proxmox-ve-9.2`: PVE 9.2 e il kernel sono già installati, mentre identità,
-rete e cluster restano esercizi manuali. `Vagrantfile.start` crea soltanto VM,
-NIC e dischi e non esegue provisioner nel guest.
+rete e cluster restano esercizi manuali. `Vagrantfile.start` usa le stesse box,
+VM, risorse, NIC, MAC e dischi del percorso assistito, ma non dichiara alcun
+provisioner del guest.
 
 Su VM generiche o bare metal si può invece partire da Debian 13 pulita: in quel
 caso seguire anche le sezioni 6, 7 e 9 dedicate all'installazione di PVE.
@@ -60,8 +61,9 @@ VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant status
 ```
 
 Usare la stessa variabile per **ogni** comando Vagrant del percorso manuale.
-Senza la variabile viene selezionato il `Vagrantfile` assistito, che rappresenta
-un ambiente distinto e avvierebbe i provisioner.
+I due file condividono la directory `.vagrant`: senza la variabile viene
+caricato il `Vagrantfile` assistito, che può operare sulle stesse macchine e
+avviare i provisioner.
 
 Per lavorare un nodo alla volta:
 
@@ -185,10 +187,13 @@ HA fermi, rendere il watchdog solo diagnostico:
 
 ```bash
 echo 'options softdog soft_noboot=1' | sudo tee /etc/modprobe.d/infra-lab-softdog.conf
+sudo systemctl stop pve-ha-lrm pve-ha-crm
 sudo systemctl stop watchdog-mux
 sudo modprobe -r softdog
 sudo systemctl start watchdog-mux
-sudo dmesg | grep 'softdog: initialized'
+sudo timeout 10 bash -c \
+  "until dmesg | grep 'softdog: initialized. soft_noboot=1' >/dev/null; do sleep 0.2; done"
+sudo systemctl start pve-ha-crm pve-ha-lrm
 ```
 
 L'ultima riga deve riportare `soft_noboot=1`. Con questa opzione un nodo che
@@ -399,6 +404,14 @@ dmesg | grep -iE 'kvm|svm' | tail -n 20
 avviare a sua volta VM accelerate. Se manca, non proseguire dando per operativo
 il nodo: controllare SVM nel firmware, impostazione `nested-hw-virt` della VM e
 conflitti fra VirtualBox e KVM sull'host.
+
+Prima di creare il cluster, lasciare ogni nodo acceso per alcuni minuti e
+verificare più volte SSH, data e UI. Sul Bosgame con VirtualBox 7.2.18 e nested
+AMD-V è stato riprodotto uno stall con log `TM: Giving up catch-up attempt` e
+circa 60 secondi di ritardo. `--virt-vmsave-vmload off` non lo ha risolto;
+disabilitare nested AMD-V rende stabile il boot ma elimina `/dev/kvm`, quindi
+non costituisce una soluzione per questi laboratori. Se il difetto ricompare,
+fermarsi prima di cluster, Ceph o VM annidate e conservare `VBox.log`.
 
 ## 9. Installare Proxmox VE o ripristinare gli storage locali
 

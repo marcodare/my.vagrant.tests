@@ -4,6 +4,8 @@
 #  - remote: porta pubblicata da lb1 (e lb2 come riserva), usabile dal Mac.
 # Non avvia né modifica VM: richiede il cluster già inizializzato con STEPS.md.
 # Uso: ./scripts/kubeconfig.sh [indirizzo-remoto]
+# Nel percorso basic mantenere VAGRANT_VAGRANTFILE=Vagrantfile.start: entrambe le
+# definizioni condividono lo stato .vagrant, ma non vanno alternate.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

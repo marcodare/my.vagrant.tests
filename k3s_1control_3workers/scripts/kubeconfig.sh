@@ -24,8 +24,8 @@ node = next(n for n in spec["nodes"] if n["name"] == "control1")
 print("192.168.%d.%d" % (spec["subnet"], node["host"]), node["api_host_port"])
 ')
 
-# Il percorso basic e quello assistito usano stati Vagrant distinti: si riusa la
-# stessa variabile con cui il laboratorio è stato creato.
+# I due percorsi condividono `.vagrant`: si riusa la stessa variabile con cui il
+# laboratorio è stato creato, evitando di caricare l'altra definizione.
 vagrant_env=${VAGRANT_VAGRANTFILE:-}
 if [[ -n $vagrant_env ]]; then export VAGRANT_VAGRANTFILE=$vagrant_env; fi
 

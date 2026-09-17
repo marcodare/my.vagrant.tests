@@ -75,24 +75,24 @@ primo utilizzo del relativo builder.
 Ogni laboratorio offre due punti di partenza:
 
 - `Vagrantfile`: percorso assistito esistente, con provisioning dichiarato dal lab;
-- `Vagrant.start`: crea solo VM, NIC e dischi; `STEPS.md` guida la configurazione manuale.
-  `linux_4nodes` e tutti i laboratori Proxmox usano il nome equivalente
-  `Vagrantfile.start`.
+- `Vagrantfile.start`: crea solo VM, NIC e dischi; `STEPS.md` guida la
+  configurazione manuale. Alcuni laboratori non ancora revisionati conservano
+  temporaneamente il nome legacy `Vagrant.start`.
 
 Per il percorso didattico:
 
 ```bash
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant up
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant ssh <nodo>
-VAGRANT_VAGRANTFILE=Vagrant.start vagrant halt
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant ssh <nodo>
+VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant halt
 ```
 
 La variabile deve essere presente in ogni comando. Non alternare i due file
 sulle stesse VM: per cambiare percorso, salvare gli appunti e distruggere
 esplicitamente l'istanza del lab con lo stesso `VAGRANT_VAGRANTFILE` usato per
-crearla. Nei lab `linux_4nodes` e Proxmox sostituire `Vagrant.start` con
-`Vagrantfile.start`. Il file basic lascia senza IP le NIC
-del lab; la NIC NAT resta configurata dalla box per SSH e download.
+crearla. Nei laboratori legacy usare invece il nome ancora presente nella loro
+cartella. Il file basic lascia senza IP le NIC del lab; la NIC NAT resta
+configurata dalla box per SSH e download.
 
 Eseguire dalla cartella del laboratorio:
 
@@ -127,7 +127,7 @@ scripts/                   validazione statica
 create_boxes/              builder riproducibili per box locali
 <laboratorio>/
   Vagrantfile / lab.json     percorso assistito, topologia e risorse
-  Vagrant.start / STEPS.md   VM non configurate e percorso manuale (alcuni lab usano Vagrantfile.start)
+  Vagrantfile.start / STEPS.md   VM non configurate e percorso manuale
   scripts/up.sh            avvio iniziale
   scripts/provision/       provisioning Bash locale al laboratorio
   README.md                accesso ed esercizi specifici

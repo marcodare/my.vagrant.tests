@@ -1,6 +1,6 @@
 # Verifiche statiche dei laboratori
 
-Eseguite il 16 settembre 2026 sul Bosgame (Ubuntu 26.04.1 amd64), senza
+Eseguite il 17 settembre 2026 sul Bosgame (Ubuntu 26.04.1 amd64), senza
 installare pacchetti host e senza avviare VM:
 
 | Controllo | Esito |
@@ -63,11 +63,18 @@ funzioni FreeBSD simulate (XML ben formato, interfacce e regole attese). Non
 sono stati provati sul Bosgame il bootstrap reale, il riavvio in OPNsense,
 `vagrant ssh` attraverso la WAN e le rotte dei Debian.
 
-Il laboratorio `proxmox_singlenode` è stato aggiunto il 16 settembre 2026. Sul
-Bosgame il percorso assistito ha completato clone, provisioning e reload; sono
+Il laboratorio `proxmox_singlenode` è stato provato sul Bosgame il 17 settembre
+2026. Il percorso assistito ha completato clone, provisioning e reload; sono
 stati verificati PVE 9.2.2, kernel `7.0.2-6-pve`, `/dev/kvm`, `vmbr0` su
 `192.168.68.11/24`, route NAT, NTP, storage `local`/`local-lvm` e risposta HTTPS
-della UI. Un falso errore del controllo `softdog`, causato da `grep -q` con
-`pipefail`, è stato corretto durante la prova. Restano non collaudati il percorso
-basic e l'avvio di una VM annidata; il lab non è dichiarato operativo oltre il
-perimetro verificato.
+della UI. Il controllo `softdog` è stato corretto sia per evitare `grep -q` con
+`pipefail`, sia per attendere il messaggio asincrono del modulo dopo il ritorno
+di `systemctl`.
+
+Il collaudo prolungato ha però riprodotto con VirtualBox 7.2.18 e nested AMD-V
+uno stall del clock: `VBox.log` registra `TM: Giving up catch-up attempt` con
+circa 60 secondi di ritardo, poi SSH e UI diventano irraggiungibili. Il test con
+`virt-vmsave-vmload=off` non ha risolto; disabilitare nested AMD-V rende il boot
+stabile ma rimuove `/dev/kvm`. I quattro laboratori PVE multinodo hanno ricevuto
+le stesse correzioni statiche, ma non sono stati avviati e non sono dichiarati
+operativi su questa combinazione host/hypervisor.

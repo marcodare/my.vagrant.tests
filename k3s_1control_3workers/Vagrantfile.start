@@ -1,24 +1,17 @@
 # frozen_string_literal: true
-# Percorso assistito: crea le VM, configura le reti e prepara il sistema.
-# L'installazione del cluster resta manuale e viene svolta in STEPS.md.
+# Percorso basic: stessa infrastruttura del Vagrantfile assistito, senza gli
+# script che configurano il guest.
+# Avvio: VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
 
 require 'json'
+
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
-# La rete cluster viene letta da lab.json invece di essere ripetuta qui: il
-# percorso assistito e Vagrantfile.start devono descrivere la stessa topologia.
-cluster_net = spec.fetch('internal_networks').fetch(0)
-cluster_prefix = cluster_net.fetch('prefix')
-
-# /etc/hosts generato dai nodi realmente dichiarati, così il file dentro il
-# guest non elenca mai macchine che questo laboratorio non crea.
-hosts = spec.fetch('nodes').map do |node|
-  "#{cluster_prefix}.#{node.fetch('host')} #{node.fetch('name')}"
-end.join(';')
+# La rete cluster deve coincidere con quella del percorso assistito.
+cluster_prefix = spec.fetch('internal_networks').fetch(0).fetch('prefix')
 
 Vagrant.configure('2') do |config|
   # Le box includono già le Guest Additions e le shared folder sono disabilitate.
-  # Evita che il plugin opzionale vagrant-vbguest modifichi il guest prima dei provisioner.
   config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
 
   config.vm.box = spec.fetch('box')
@@ -37,17 +30,16 @@ Vagrant.configure('2') do |config|
 
     config.vm.define node.fetch('name') do |vm|
       # NIC 1 NAT; NIC 2 management host-only; NIC 3 traffico cluster interno.
+      # auto_config=false lascia hostname e indirizzi alla procedura manuale.
       vm.vm.network 'private_network', ip: address, auto_config: false
       vm.vm.network 'private_network', ip: cluster_address, auto_config: false,
         virtualbox__intnet: "#{spec.fetch('id')}-cluster"
 
-      # L'API sul solo host-only sarebbe raggiungibile dal Bosgame ma non da
-      # altre macchine. La NAT la pubblica anche su LAN/Tailscale: host_ip
-      # 0.0.0.0 perché il default di Vagrant è il solo 127.0.0.1.
-      # Il certificato deve includere quegli indirizzi: vedere STEPS.md.
+      # Anche nel percorso basic l'API usa lo stesso forwarding dichiarato in
+      # lab.json; il servizio comparirà solo dopo l'installazione manuale.
       if node['api_host_port']
-        vm.vm.network 'forwarded_port', guest: 6443, host: node.fetch('api_host_port'),
-          host_ip: '0.0.0.0', id: 'kube-api'
+        vm.vm.network 'forwarded_port', guest: 6443,
+          host: node.fetch('api_host_port'), host_ip: '0.0.0.0', id: 'kube-api'
       end
 
       vm.vm.provider 'virtualbox' do |vb|
@@ -57,15 +49,11 @@ Vagrant.configure('2') do |config|
         vb.gui = false
         vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
         vb.customize ['modifyvm', :id, '--macaddress3', cluster_mac]
-        # Promiscuo su entrambe le NIC del lab, come negli altri laboratori:
-        # serve al traffico con MAC sorgente diverso da quello della NIC.
         vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
         vb.customize ['modifyvm', :id, '--nicpromisc3', 'allow-all']
       end
+
       vm.vm.disk :disk, size: '80GB', primary: true
-      vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
-        args: [node.fetch('name'), address, management_mac, cluster_address, cluster_mac, hosts]
-      vm.vm.provision 'shell', path: "scripts/provision/#{node.fetch('role')}.sh"
     end
   end
 end

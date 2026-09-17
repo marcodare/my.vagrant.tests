@@ -29,9 +29,11 @@ if [[ ! -f $softdog_conf ]]; then
   systemctl stop watchdog-mux.service
   modprobe -r softdog
   systemctl start watchdog-mux.service
-  # Non usare grep -q con pipefail: dopo il match può chiudere la pipe e far
-  # terminare dmesg con SIGPIPE, trasformando un controllo riuscito in errore.
-  dmesg | grep 'softdog: initialized. soft_noboot=1' >/dev/null || {
+  # Il messaggio può arrivare subito dopo il ritorno di systemctl. Attenderlo
+  # senza grep -q: con pipefail la chiusura anticipata della pipe produrrebbe
+  # un falso errore per il SIGPIPE di dmesg.
+  timeout 10 bash -c \
+    "until dmesg | grep 'softdog: initialized. soft_noboot=1' >/dev/null; do sleep 0.2; done" || {
     echo 'softdog non ricaricato con soft_noboot=1.' >&2
     exit 1
   }

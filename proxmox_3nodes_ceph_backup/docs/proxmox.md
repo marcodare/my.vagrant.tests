@@ -35,6 +35,12 @@ sudo pveversion
 UI: `https://192.168.S.11:8006` (anche `.12`, `.13`), utente `root`, realm
 **Linux PAM**. Il certificato iniziale è autofirmato.
 
+La rete management è host-only: la UI è raggiungibile dal Bosgame, non
+direttamente dalla LAN senza routing o tunnel. Prima di creare il cluster,
+lasciare i nodi accesi per alcuni minuti e verificare più volte SSH, data e UI.
+Sul mononodo con VirtualBox 7.2.18 e nested AMD-V è stato osservato uno stall
+con `TM: Giving up catch-up attempt`; `virt-vmsave-vmload=off` non lo risolve.
+
 ## Cluster: creazione e join manuale
 
 Creare il cluster prima di creare VM sui nodi da aggiungere. Da shell root su pve1:

@@ -9,16 +9,15 @@ senza sostituzione. Ogni README riporta gli indirizzi effettivi.
 Dalla cartella scelta, `./scripts/up.sh` esegue:
 
 ```bash
-vagrant up --provider=virtualbox  # Debian + rete + kernel PVE
-vagrant reload                  # avvio del kernel PVE e dei bridge
-vagrant provision               # installazione dello stack PVE
+vagrant up --provider=virtualbox  # clone PVE, identità univoca e rete persistente
+vagrant reload                   # attivazione dei bridge configurati
 ```
 
-Il primo passaggio non ha ancora la UI Proxmox. Nessun plugin per il reboot.
-Su PBS il pacchetto server è installato già al primo passaggio. La nuova rete
-Debian è attiva dopo il reload. In caso di download interrotto ripetere lo step
-fallito; dopo esercizi sulle reti non rilanciare il provisioner base: riscrive
-il layout iniziale dei bridge.
+La UI sugli indirizzi management è disponibile dopo il reload. Nessun plugin
+gestisce il reboot. Su PBS il pacchetto server è installato al primo passaggio.
+La nuova rete è attiva dopo il reload. In caso di download interrotto ripetere
+lo step fallito; dopo esercizi sulle reti non rilanciare il provisioner base:
+riscrive il layout iniziale dei bridge.
 
 Per ciascuno di `pve1`, `pve2`, `pve3`:
 
@@ -35,6 +34,12 @@ sudo pveversion
 
 UI: `https://192.168.S.11:8006` (anche `.12`, `.13`), utente `root`, realm
 **Linux PAM**. Il certificato iniziale è autofirmato.
+
+La rete management è host-only: la UI è raggiungibile dal Bosgame, non
+direttamente dalla LAN senza routing o tunnel. Prima di creare il cluster,
+lasciare i nodi accesi per alcuni minuti e verificare più volte SSH, data e UI.
+Sul mononodo con VirtualBox 7.2.18 e nested AMD-V è stato osservato uno stall
+con `TM: Giving up catch-up attempt`; `virt-vmsave-vmload=off` non lo risolve.
 
 ## Cluster: creazione e join manuale
 

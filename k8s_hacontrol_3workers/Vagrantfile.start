@@ -1,0 +1,58 @@
+# frozen_string_literal: true
+# Percorso basic: stessa infrastruttura del Vagrantfile assistito, senza gli
+# script che configurano il guest.
+# Avvio: VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
+
+require 'json'
+
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+cluster_prefix = spec.fetch('internal_networks').fetch(0).fetch('prefix')
+subnet = spec.fetch('subnet')
+
+Vagrant.configure('2') do |config|
+  # Le box includono già le Guest Additions e le shared folder sono disabilitate.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+
+  config.vm.box = spec.fetch('box')
+  config.vm.box_version = spec.fetch('box_version')
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.boot_timeout = 900
+
+  spec.fetch('nodes').each_with_index do |node, index|
+    mac_id = spec.fetch('mac_id', subnet)
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+    cluster_address = "#{cluster_prefix}.#{node.fetch('host')}"
+    management_mac = format('080027%02X%02X02', mac_id, index + 1)
+    cluster_mac = format('080027%02X%02X03', mac_id, index + 1)
+
+    config.vm.define node.fetch('name') do |vm|
+      # NIC 1 NAT; NIC 2 management/API; NIC 3 traffico cluster ed etcd.
+      # auto_config=false lascia hostname e indirizzi alla procedura manuale.
+      vm.vm.network 'private_network', ip: address, auto_config: false
+      vm.vm.network 'private_network', ip: cluster_address, auto_config: false,
+        virtualbox__intnet: "#{spec.fetch('id')}-cluster"
+
+      # I due load balancer pubblicano gli stessi endpoint del percorso
+      # assistito; HAProxy verrà installato manualmente seguendo STEPS.md.
+      if node['api_host_port']
+        vm.vm.network 'forwarded_port', guest: 6443,
+          host: node.fetch('api_host_port'), host_ip: '0.0.0.0', id: 'kube-api'
+      end
+
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        vb.gui = false
+        vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
+        vb.customize ['modifyvm', :id, '--macaddress3', cluster_mac]
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+        vb.customize ['modifyvm', :id, '--nicpromisc3', 'allow-all']
+      end
+
+      vm.vm.disk :disk, size: '80GB', primary: true
+    end
+  end
+end

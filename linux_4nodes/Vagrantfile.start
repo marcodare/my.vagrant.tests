@@ -1,16 +1,20 @@
 # frozen_string_literal: true
-# Variante didattica: crea esclusivamente VM, NIC e dischi.
-# Non configura hostname, indirizzi IP, pacchetti o servizi nel guest.
+# Percorso basic: stessa infrastruttura del Vagrantfile assistito, senza gli
+# script che configurano hostname, indirizzi IP, pacchetti o servizi nel guest.
 # Avvio: VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
 
 require 'json'
-
 spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
 
+subnet = spec.fetch('subnet')
+# mac_id diverso dalla subnet: il lab k3s usa già 66 come byte MAC, e 72
+# sta fuori dal pool host-only così nessuna subnet futura lo erediterà.
+mac_id = spec.fetch('mac_id', subnet)
+
 Vagrant.configure('2') do |config|
-  # Un eventuale vagrant-vbguest installato sull'host non deve modificare le VM
-  # del percorso basic. Le Guest Additions incluse nelle box sono sufficienti:
-  # non ci sono shared folder e questo file deve creare solo VM, NIC e dischi.
+  # Le box includono già le Guest Additions necessarie. Il plugin opzionale
+  # vagrant-vbguest è archiviato e, se presente sull'host, tenta di allinearle.
+  # Il lab non usa shared folder, quindi l'aggiornamento non serve.
   config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
 
   # Box e versione sono per nodo: ogni macchina ha la propria distribuzione.
@@ -19,51 +23,25 @@ Vagrant.configure('2') do |config|
   config.vm.boot_timeout = 900
 
   spec.fetch('nodes').each_with_index do |node, index|
-    subnet = spec.fetch('subnet')
-    mac_id = spec.fetch('mac_id', subnet)
-    netmask = spec.fetch('netmask', '255.255.255.0')
     address = "192.168.#{subnet}.#{node.fetch('host')}"
     lab_mac = format('080027%02X%02X02', mac_id, index + 1)
-    networks = node.fetch('attach_internal', true) ? spec.fetch('internal_networks') : []
 
     config.vm.define node.fetch('name') do |vm|
       vm.vm.box = node.fetch('box')
       vm.vm.box_version = node.fetch('box_version')
-
-      # NIC 1 resta NAT/DHCP per consentire vagrant ssh e il download pacchetti.
-      # NIC 2 è host-only. L'IP indica a VirtualBox il segmento da creare, ma
-      # auto_config=false impedisce a Vagrant di configurarlo dentro il guest.
-      vm.vm.network 'private_network', ip: address, netmask: netmask, auto_config: false
-
-      # Eventuali reti interne aggiunte in lab.json restano anch'esse senza IP.
-      networks.each do |network|
-        vm.vm.network 'private_network', ip: "#{network.fetch('prefix')}.#{node.fetch('host')}",
-          auto_config: false,
-          virtualbox__intnet: "#{spec.fetch('id')}-#{network.fetch('name')}"
-      end
+      # NIC 1 NAT per SSH e pacchetti; NIC 2 host-only, la rete del laboratorio.
+      vm.vm.network 'private_network', ip: address, auto_config: false
 
       vm.vm.provider 'virtualbox' do |vb|
-        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}-start"
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
         vb.memory = node.fetch('memory')
         vb.cpus = node.fetch('cpus')
         vb.gui = false
         vb.customize ['modifyvm', :id, '--macaddress2', lab_mac]
         vb.customize ['modifyvm', :id, '--nested-hw-virt', 'off']
         vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
-        networks.each_with_index do |_network, position|
-          slot = position + 3
-          vb.customize ['modifyvm', :id, "--macaddress#{slot}",
-                        format('080027%02X%02X%02X', mac_id, index + 1, slot)]
-          vb.customize ['modifyvm', :id, "--nicpromisc#{slot}", 'allow-all']
-        end
       end
-
-      # Vagrant crea i supporti, ma non partiziona né formatta i dischi dati.
       vm.vm.disk :disk, size: '80GB', primary: true
-      if node['disk_gb']
-        vm.vm.disk :disk, size: "#{node.fetch('disk_gb')}GB",
-          name: "#{node.fetch('name')}-data"
-      end
     end
   end
 end
