@@ -45,6 +45,15 @@ EOF
 sshd -t
 systemctl enable ssh
 
+# watchdog-mux arma softdog a 10 s per il fencing HA. In VirtualBox il guest
+# può restare congelato più a lungo (import, catch-up del clock, pause del
+# host) e si resetterebbe da solo nel primo minuto di vita del clone, prima di
+# qualsiasi provisioning. La box è solo VirtualBox: registrare l'evento invece
+# di riavviare. I lab lo ripetono in finalize-pve.sh per le box già costruite.
+cat > /etc/modprobe.d/infra-lab-softdog.conf <<'EOF'
+options softdog soft_noboot=1
+EOF
+
 cat > /etc/infra-box-release <<EOF
 NAME=local/proxmox-ve-9.2
 BOX_VERSION=${BOX_VERSION:?BOX_VERSION non impostata da Packer}

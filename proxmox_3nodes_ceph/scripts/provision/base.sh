@@ -29,6 +29,8 @@ systemctl enable --now chrony
 iface_for_mac() {
   local path
   for path in /sys/class/net/*; do
+    # bonding_masters è un file, non un'interfaccia.
+    [[ -f $path/address ]] || continue
     if [[ $(cat "$path/address") == "$1" ]]; then basename "$path"; return; fi
   done
   echo "NIC con MAC $1 assente" >&2
@@ -39,8 +41,18 @@ nic=$(iface_for_mac "$mac")
 # pacchetto è solo suggerito. Installarlo esplicitamente mantiene operativa la
 # NIC NAT usata da Vagrant per SSH dopo il passaggio da systemd-networkd.
 apt-get install -y ifupdown2 isc-dhcp-client
+# La box locale PVE nasce dall'installer ISO, che rende la prima NIC (quella
+# NAT) porta di vmbr0 con IP statico: il default route esce dal bridge. Si
+# risale alla porta fisica, che nel nuovo layout torna NIC NAT in DHCP mentre
+# vmbr0 viene riassegnato alla rete management del lab.
 nat=$(ip -4 route show default | awk 'NR==1 {print $5}')
-[[ -n $nat && $nat != "$nic" && $nat != vmbr* ]] || { echo 'NIC NAT non identificata'; exit 1; }
+if [[ -n $nat && -d /sys/class/net/$nat/brif ]]; then
+  nat=$(find /sys/class/net/"$nat"/brif -mindepth 1 -maxdepth 1 -printf '%f\n' | head -n 1)
+fi
+[[ -n $nat && $nat != "$nic" && $nat != vmbr* && -d /sys/class/net/$nat/device ]] || {
+  echo "NIC NAT non identificata (default route: $(ip -4 route show default | head -n 1))" >&2
+  exit 1
+}
 # Il primo boot conserva la rete corrente; il nuovo layout entra al reload.
 cat > /etc/network/interfaces <<EOF
 auto lo

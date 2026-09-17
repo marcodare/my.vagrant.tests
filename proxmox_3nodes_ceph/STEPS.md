@@ -53,10 +53,18 @@ La rimozione di `config.db` vale esclusivamente per i cloni standalone vuoti
 della box. Non applicarla a nodi configurati o a installazioni generiche già
 correttamente inizializzate.
 
+Sui cloni VirtualBox, con i servizi HA fermi, rendere solo diagnostico il
+watchdog `softdog` (timeout 10 s, che resetta il guest se il host lo congela
+più a lungo): `options softdog soft_noboot=1` in
+`/etc/modprobe.d/infra-lab-softdog.conf`, poi `systemctl stop watchdog-mux`,
+`modprobe -r softdog`, `systemctl start watchdog-mux`. Il fencing HA resta un
+esercizio di comportamento; vedere `proxmox_3nodes_simple/STEPS.md`.
+
 ## 2. Rete e cluster PVE
 
-Installare `ifupdown2 isc-dhcp-client chrony`. Mantenere la NIC NAT in DHCP,
-senza spostarne la default route. Creare:
+Installare `ifupdown2 isc-dhcp-client chrony`. Portare la NIC NAT in DHCP,
+lasciandole la default route. Nella box locale la NIC NAT è inizialmente la porta di un `vmbr0` statico creato dall'installer ISO (`bridge link` la mostra): il file `/etc/network/interfaces` va riscritto per intero.
+Creare:
 
 | Bridge | Rete | Uso |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # Runbook Proxmox
 
-Queste istruzioni valgono per i quattro lab PVE. Sostituire `S` con il terzo
+Queste istruzioni valgono per i quattro lab PVE multinodo. Sostituire `S` con il terzo
 ottetto del lab (56, 57, 58, 59). I comandi con IP di esempio non vanno copiati
 senza sostituzione. Ogni README riporta gli indirizzi effettivi.
 
@@ -85,6 +85,11 @@ Il lab semplice permette di osservare quorum e servizi HA, ma per un test di
 riavvio automatico usare una VM con tutti i dischi su Ceph nel lab dedicato.
 In assenza di watchdog hardware, HA utilizza il watchdog software del guest:
 questo è un esercizio di comportamento, non una garanzia di fencing fisico.
+Nei nodi VirtualBox il provisioning imposta `softdog soft_noboot=1`: un nodo
+isolato registra `softdog: Triggered - Reboot ignored` invece di riavviarsi,
+perché il timeout di 10 s di `watchdog-mux` scatterebbe anche per un semplice
+congelamento del guest da parte del host. Per osservare il recupero HA,
+spegnere il nodo esplicitamente (`vagrant halt --force` o `poweroff`).
 
 Nel lab Ceph, creare/migrare il disco della VM 100 su `ceph-vm`, quindi:
 

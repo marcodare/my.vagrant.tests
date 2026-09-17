@@ -1,0 +1,87 @@
+# frozen_string_literal: true
+# Laboratorio autonomo con un solo nodo Proxmox VE standalone.
+
+require 'json'
+
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+# /etc/hosts viene generato dai nodi realmente presenti nel lab.
+lab_hosts = spec.fetch('nodes').map do |lab_node|
+  "192.168.#{spec.fetch('subnet')}.#{lab_node.fetch('host')} " \
+    "#{lab_node.fetch('name')}.lab.test #{lab_node.fetch('name')}"
+end.join(';')
+
+Vagrant.configure('2') do |config|
+  # La box PVE non usa le Guest Additions e il lab non richiede shared folder.
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.boot_timeout = 900
+
+  spec.fetch('nodes').each_with_index do |node, index|
+    subnet = spec.fetch('subnet')
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+    management_mac = format('080027%02X%02X02', subnet, index + 1)
+
+    # Il lab non dichiara reti interne, ma mantiene la stessa struttura degli
+    # altri lab per restare estendibile modificando soltanto file locali.
+    extras = spec.fetch('internal_networks').each_with_index.map do |net, position|
+      nic_mac = format(
+        '080027%02X%02X%02X', subnet, index + 1, position + 3
+      ).scan(/../).join(':').downcase
+      "#{nic_mac},#{net.fetch('prefix')}.#{node.fetch('host')},vmbr#{position + 1}"
+    end.join(';')
+
+    config.vm.define node.fetch('name') do |vm|
+      vm.vm.box = node.fetch('box', spec.fetch('box'))
+      vm.vm.box_version = node.fetch('box_version', spec.fetch('box_version'))
+
+      # NIC 1: NAT tecnica per SSH, APT, DNS e NTP.
+      # NIC 2: rete host-only di management, configurata nel guest da base.sh.
+      vm.vm.network 'private_network', ip: address, auto_config: false
+
+      spec.fetch('internal_networks').each do |net|
+        vm.vm.network 'private_network',
+          ip: "#{net.fetch('prefix')}.#{node.fetch('host')}",
+          auto_config: false,
+          virtualbox__intnet: "#{spec.fetch('id')}-#{net.fetch('name')}"
+      end
+
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        vb.gui = false
+        vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+
+        spec.fetch('internal_networks').each_with_index do |_net, position|
+          slot = position + 3
+          vb.customize [
+            'modifyvm', :id, "--macaddress#{slot}",
+            format('080027%02X%02X%02X', subnet, index + 1, slot)
+          ]
+          vb.customize ['modifyvm', :id, "--nicpromisc#{slot}", 'allow-all']
+        end
+      end
+
+      # Il disco primario è dinamico. L'espansione del filesystem nel guest va
+      # verificata separatamente; non vengono creati o formattati altri dischi.
+      vm.vm.disk :disk, size: '80GB', primary: true
+
+      # Prima si sostituisce in sicurezza l'identità del template PVE, poi si
+      # configura rete e pacchetti comuni e infine si verifica il ruolo.
+      vm.vm.provision 'shell', path: 'scripts/provision/finalize-pve.sh',
+        args: [node.fetch('name'), address, lab_hosts]
+      vm.vm.provision 'shell', path: 'scripts/provision/base.sh',
+        args: [
+          node.fetch('role'), node.fetch('name'), address,
+          management_mac.scan(/../).join(':').downcase, extras,
+          subnet.to_s, lab_hosts
+        ]
+      vm.vm.provision 'shell', path: 'scripts/provision/pve.sh',
+        args: [spec.fetch('versions').fetch('pve')]
+    end
+  end
+end

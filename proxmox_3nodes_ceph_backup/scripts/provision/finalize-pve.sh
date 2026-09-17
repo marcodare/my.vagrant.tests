@@ -17,7 +17,28 @@ source /etc/infra-box-release
   echo 'Identità della box Proxmox inattesa.' >&2
   exit 1
 }
-mountpoint -q /etc/pve || { echo 'pmxcfs non è montato.' >&2; exit 1; }
+
+# watchdog-mux arma softdog a 10 s. Un guest VirtualBox annidato può restare
+# congelato più a lungo (import della box, catch-up del clock, pause del host)
+# e verrebbe resettato a metà provisioning, lasciando file troncati. Con
+# soft_noboot il kernel registra l'evento invece di riavviare: il fencing HA
+# resta un esercizio di comportamento, come descritto in docs/proxmox.md.
+# watchdog-mux chiude /dev/watchdog con il magic close, quindi fermarlo e
+# ricaricare il modulo è sicuro finché i servizi HA sono fermi. Va fatto
+# per primo: nella finestra fra il boot e questo punto il reset è già
+# stato osservato sul Bosgame.
+softdog_conf=/etc/modprobe.d/infra-lab-softdog.conf
+if [[ ! -f $softdog_conf ]]; then
+  printf 'options softdog soft_noboot=1\n' > "$softdog_conf"
+  systemctl stop pve-ha-lrm.service pve-ha-crm.service 2>/dev/null || true
+  systemctl stop watchdog-mux.service
+  modprobe -r softdog
+  systemctl start watchdog-mux.service
+  dmesg | grep -q 'softdog: initialized. soft_noboot=1' || {
+    echo 'softdog non ricaricato con soft_noboot=1.' >&2
+    exit 1
+  }
+fi
 
 install -d -m 0755 "$(dirname "$marker")"
 if [[ -f $marker ]]; then
@@ -28,15 +49,11 @@ if [[ -f $marker ]]; then
   exit 0
 fi
 
-[[ ! -e /etc/pve/corosync.conf ]] || {
-  echo 'Rifiuto il reset: il nodo appartiene già a un cluster.' >&2
-  exit 1
+# Un reset brusco durante un tentativo precedente può lasciare /etc/hosts
+# vuoto: senza loopback e senza il proprio nome pmxcfs non parte.
+grep -qE '^127\.0\.0\.1[[:space:]]' /etc/hosts || {
+  printf '127.0.0.1\tlocalhost\n::1\tlocalhost ip6-localhost ip6-loopback\n' >> /etc/hosts
 }
-if find /etc/pve/nodes -type f \( -path '*/qemu-server/*.conf' -o -path '*/lxc/*.conf' \) -print -quit | grep -q .; then
-  echo 'Rifiuto il reset: la box contiene già VM o container.' >&2
-  exit 1
-fi
-
 sed -i '/# BEGIN INFRA LAB/,/# END INFRA LAB/d' /etc/hosts
 sed -i -E "/^[^#].*[[:space:]](${name}|${PVE_TEMPLATE_HOSTNAME})(\.lab\.test)?([[:space:]]|$)/d" /etc/hosts
 {
@@ -45,6 +62,25 @@ sed -i -E "/^[^#].*[[:space:]](${name}|${PVE_TEMPLATE_HOSTNAME})(\.lab\.test)?([
   echo '# END INFRA LAB'
 } >> /etc/hosts
 grep -qE "^${address}[[:space:]]+${name}\.lab\.test[[:space:]]+${name}$" /etc/hosts
+sync
+
+# pmxcfs può essere fermo se un tentativo precedente è stato interrotto:
+# ora che il nome si risolve, un riavvio del servizio deve bastare.
+if ! mountpoint -q /etc/pve; then
+  systemctl reset-failed pve-cluster.service 2>/dev/null || true
+  systemctl restart pve-cluster.service
+  timeout 30 bash -c 'until mountpoint -q /etc/pve; do sleep 1; done'
+fi
+mountpoint -q /etc/pve || { echo 'pmxcfs non è montato.' >&2; exit 1; }
+
+[[ ! -e /etc/pve/corosync.conf ]] || {
+  echo 'Rifiuto il reset: il nodo appartiene già a un cluster.' >&2
+  exit 1
+}
+if find /etc/pve/nodes -type f \( -path '*/qemu-server/*.conf' -o -path '*/lxc/*.conf' \) -print -quit | grep -q .; then
+  echo 'Rifiuto il reset: la box contiene già VM o container.' >&2
+  exit 1
+fi
 
 systemctl stop pve-ha-lrm.service pve-ha-crm.service pvescheduler.service \
   pvestatd.service pveproxy.service pvedaemon.service 2>/dev/null || true

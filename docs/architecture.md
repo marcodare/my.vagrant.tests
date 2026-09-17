@@ -7,6 +7,7 @@ ogni cartella è autosufficiente e può essere copiata da sola.
 
 | Lab | Management / vmbr0 | Reti interne VirtualBox |
 | --- | --- | --- |
+| Proxmox singlenode | 192.168.68.0/24 | nessuna |
 | simple | 192.168.56.0/24 | nessuna |
 | networks | 192.168.57.0/24 | 10.57.1.0/24 migrazione; 10.57.2.0/24 guest/VLAN |
 | ceph | 192.168.58.0/24 | 10.58.1.0/24 Ceph |
@@ -73,7 +74,7 @@ Il lab Linux usa `mac_id=72` perché il byte 66 è già occupato da k3s; 72 è
 fuori dal pool host-only e non verrà ereditato per default da nuove subnet.
 
 Ogni nodo può dichiarare `box` e `box_version`; senza override vale la box del
-lab. I nodi PVE di entrambi i percorsi dei quattro laboratori Proxmox usano
+lab. I nodi PVE di entrambi i percorsi dei cinque laboratori Proxmox usano
 `local/proxmox-ve-9.2` versione `0`; nel lab con backup il nodo PBS sovrascrive
 la box del lab e resta su Debian. Nel ruolo `linux` (lab `linux_4nodes`) la box va scelta fra `LINUX_BOXES`
 in `scripts/lab_config.py`; negli altri ruoli deve coincidere con quella del

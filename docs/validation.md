@@ -1,6 +1,6 @@
 # Verifiche statiche dei laboratori
 
-Eseguite il 15 settembre 2026 sul Bosgame (Ubuntu 26.04.1 amd64), senza
+Eseguite il 16 settembre 2026 sul Bosgame (Ubuntu 26.04.1 amd64), senza
 installare pacchetti host e senza avviare VM:
 
 | Controllo | Esito |
@@ -8,11 +8,11 @@ installare pacchetti host e senza avviare VM:
 | Sintassi Bash di tutti gli script | OK |
 | ShellCheck di tutti gli script | OK |
 | Sintassi dei Vagrantfile e delle definizioni basic (`Vagrant.start`/`Vagrantfile.start`) | OK |
-| `vagrant validate`, Vagrant 2.4.9, tredici laboratori e due percorsi | OK |
+| `vagrant validate`, Vagrant 2.4.9, quattordici laboratori e due percorsi | OK |
 | Topologie: IP, MAC, risorse, box/ruoli, file locali | OK |
 | Ruff, codice Python | OK |
 | Mypy strict, codice Python e test | OK |
-| Pytest, configurazioni, versioni e isolamento dei percorsi | 24 passed |
+| Pytest, configurazioni, versioni e isolamento dei percorsi | 28 passed |
 | Bandit, strumenti Python | Nessun problema rilevato |
 | Link locali dei README e runbook | OK |
 
@@ -62,3 +62,12 @@ percorsi, shellcheck, e generazione della `config.xml` provata a secco con
 funzioni FreeBSD simulate (XML ben formato, interfacce e regole attese). Non
 sono stati provati sul Bosgame il bootstrap reale, il riavvio in OPNsense,
 `vagrant ssh` attraverso la WAN e le rotte dei Debian.
+
+Il laboratorio `proxmox_singlenode` è stato aggiunto il 16 settembre 2026. Sul
+Bosgame il percorso assistito ha completato clone, provisioning e reload; sono
+stati verificati PVE 9.2.2, kernel `7.0.2-6-pve`, `/dev/kvm`, `vmbr0` su
+`192.168.68.11/24`, route NAT, NTP, storage `local`/`local-lvm` e risposta HTTPS
+della UI. Un falso errore del controllo `softdog`, causato da `grep -q` con
+`pipefail`, è stato corretto durante la prova. Restano non collaudati il percorso
+basic e l'avvio di una VM annidata; il lab non è dichiarato operativo oltre il
+perimetro verificato.

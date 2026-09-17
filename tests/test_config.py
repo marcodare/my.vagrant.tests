@@ -53,7 +53,7 @@ def test_rejects_invalid_topologies(tmp_path: Path, invalid: str) -> None:
 
 def test_all_labs_have_valid_topologies() -> None:
     paths = sorted(ROOT.glob("*/lab.json"))
-    assert len(paths) == 13
+    assert len(paths) == 14
     for path in paths:
         load_spec(path.parent)
 
@@ -62,7 +62,7 @@ def test_manual_start_files_do_not_run_provisioners() -> None:
     paths = [
         manual_vagrantfile(path.parent) for path in sorted(ROOT.glob("*/lab.json"))
     ]
-    assert len(paths) == 13
+    assert len(paths) == 14
     for path in paths:
         source = path.read_text()
         assert ".provision" not in source
@@ -74,7 +74,7 @@ def test_all_vagrantfiles_disable_optional_vbguest_updates() -> None:
         "config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')"
     )
     labs = sorted(ROOT.glob("*/lab.json"))
-    assert len(labs) == 13
+    assert len(labs) == 14
     for lab in labs:
         for definition in (lab.parent / "Vagrantfile", manual_vagrantfile(lab.parent)):
             source = definition.read_text()
@@ -91,7 +91,7 @@ def test_pbs_is_not_attached_to_ceph_network() -> None:
 
 def test_proxmox_labs_use_local_box_for_all_pve_paths() -> None:
     """Entrambi i percorsi PVE clonano la box locale già installata."""
-    for directory in sorted(ROOT.glob("proxmox_3nodes*/lab.json")):
+    for directory in sorted(ROOT.glob("proxmox*/lab.json")):
         spec = load_spec(directory.parent)
         assert spec["box"] == "local/proxmox-ve-9.2"
         assert spec["box_version"] == "0"

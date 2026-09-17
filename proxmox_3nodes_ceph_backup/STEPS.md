@@ -66,10 +66,20 @@ Questo reset è ammesso solo sui cloni standalone vuoti della box. Non usarlo
 su nodi configurati. Su `pbs1` impostare normalmente hostname `pbs1`; non
 esistono `pmxcfs` o certificati PVE da azzerare.
 
+Sui cloni VirtualBox, con i servizi HA fermi, rendere solo diagnostico il
+watchdog `softdog` (timeout 10 s, che resetta il guest se il host lo congela
+più a lungo): `options softdog soft_noboot=1` in
+`/etc/modprobe.d/infra-lab-softdog.conf`, poi `systemctl stop watchdog-mux`,
+`modprobe -r softdog`, `systemctl start watchdog-mux`. Il fencing HA resta un
+esercizio di comportamento; vedere `proxmox_3nodes_simple/STEPS.md`.
+
 ## 3. Reti e cluster
 
 Prima del passaggio a `ifupdown2`, installare anche `isc-dhcp-client` e
-`chrony`. Conservare la NIC NAT in DHCP. Configurare senza gateway:
+`chrony`. Portare la NIC NAT in DHCP: sui nodi PVE della box locale è
+inizialmente la porta di un `vmbr0` statico creato dall'installer ISO, quindi
+`/etc/network/interfaces` va riscritto per intero; su `pbs1` (Debian) è già
+in DHCP. Configurare senza gateway:
 
 | Nodi | Bridge/rete | Uso |
 | --- | --- | --- |

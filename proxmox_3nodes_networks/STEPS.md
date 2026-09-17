@@ -68,12 +68,20 @@ sudo test ! -e /etc/pve/nodes/proxmox-template
 
 Azzerare `config.db` è sicuro soltanto su questi cloni standalone vuoti. Non
 farlo mai su un nodo già configurato, con guest o appartenente a un cluster.
+
+Sui cloni VirtualBox, con i servizi HA fermi, rendere solo diagnostico il
+watchdog `softdog` (timeout 10 s, che resetta il guest se il host lo congela
+più a lungo): `options softdog soft_noboot=1` in
+`/etc/modprobe.d/infra-lab-softdog.conf`, poi `systemctl stop watchdog-mux`,
+`modprobe -r softdog`, `systemctl start watchdog-mux`. Il fencing HA resta un
+esercizio di comportamento; vedere `proxmox_3nodes_simple/STEPS.md`.
 Su un'installazione PVE generica già correttamente nominata non serve.
 
 ## 3. Costruire le reti
 
-Installare `ifupdown2`, `isc-dhcp-client` e `chrony`. Conservare la prima NIC
+Installare `ifupdown2`, `isc-dhcp-client` e `chrony`. Portare la prima NIC
 NAT in DHCP: serve a Vagrant per SSH e al guest per repository, DNS e NTP.
+Nella box locale la NIC NAT è inizialmente la porta di un `vmbr0` statico creato dall'installer ISO (`bridge link` la mostra): il file `/etc/network/interfaces` va riscritto per intero.
 Creare poi, senza gateway:
 
 | Bridge | Rete | Uso |

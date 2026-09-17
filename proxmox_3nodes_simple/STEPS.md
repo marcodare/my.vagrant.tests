@@ -99,22 +99,27 @@ sudo test ! -e /etc/pve/corosync.conf
 
 PVE deve essere nel ramo 9.2, il kernel deve terminare in `-pve`, l'hostname
 iniziale deve essere `proxmox-template` e il nodo non deve appartenere a un
-cluster. La NIC NAT dovrebbe avere un indirizzo DHCP e fornire l'unica default route. La
-seconda NIC dovrebbe essere presente ma senza IPv4 perché nel file Vagrant è
-impostato `auto_config: false`.
+cluster. L'installer ISO ha creato un primo `vmbr0` con IP statico
+(`10.0.2.15/24`, gateway `10.0.2.2`) che ha come unica porta la NIC NAT: la
+default route esce quindi dal bridge, non dalla NIC. Questo `vmbr0` verrà
+riassegnato alla rete management nel passo 5. La seconda NIC dovrebbe essere
+presente ma senza IPv4 perché nel file Vagrant è impostato `auto_config: false`.
 
-Individuare le interfacce tramite MAC:
+Individuare le interfacce tramite MAC e la porta del bridge iniziale:
 
 ```bash
 ip -o link
+ip route show default
+bridge link
 ```
 
 Non assumere nomi come `enp0s3` o `enp0s8`: possono cambiare fra box e hardware.
 Annotare:
 
-- la NIC NAT, cioè quella mostrata da `ip route show default`;
+- la NIC NAT, cioè la porta di `vmbr0` mostrata da `bridge link`
+  (su un'installazione generica è invece la NIC di `ip route show default`);
 - la NIC management, identificata dal MAC della tabella;
-- l'indirizzo e il DNS ricevuti dalla NIC NAT.
+- il gateway e il DNS attuali (`ip route show default`, `/etc/resolv.conf`).
 
 Il disco virtuale è impostato a 80 GB, ma `lsblk` e `df` possono mostrare un
 filesystem più piccolo. L'aumento del supporto VDI non implica automaticamente
@@ -169,6 +174,29 @@ standalone e privo di guest. Non eseguirla mai su un nodo configurato. Su una
 Debian pulita, che non possiede ancora `pmxcfs`, impostare soltanto l'hostname
 con `hostnamectl` e continuare con l'installazione.
 
+### Watchdog software nelle VM VirtualBox
+
+`watchdog-mux` di Proxmox arma il modulo `softdog` con timeout di 10 secondi e
+lo usa per il fencing HA. Un guest VirtualBox annidato può restare congelato
+più a lungo (import della box, recupero del clock, pause o carico del host):
+in quel caso il kernel del guest si resetta da solo a metà lavoro, lasciando
+file troncati come un `/etc/hosts` vuoto. Sui cloni VirtualBox, con i servizi
+HA fermi, rendere il watchdog solo diagnostico:
+
+```bash
+echo 'options softdog soft_noboot=1' | sudo tee /etc/modprobe.d/infra-lab-softdog.conf
+sudo systemctl stop watchdog-mux
+sudo modprobe -r softdog
+sudo systemctl start watchdog-mux
+sudo dmesg | grep 'softdog: initialized'
+```
+
+L'ultima riga deve riportare `soft_noboot=1`. Con questa opzione un nodo che
+perde il quorum registra `softdog: Triggered - Reboot ignored` invece di
+riavviarsi: il fencing resta un esercizio di comportamento, come spiegato in
+`docs/proxmox.md`. Su bare metal, o su un hypervisor che non mette in pausa il
+guest, lasciare il watchdog nella configurazione predefinita.
+
 Verificare su ogni nodo:
 
 ```bash
@@ -207,8 +235,10 @@ eventi.
 
 ## 5. Creare il bridge management `vmbr0`
 
-Modificare `/etc/network/interfaces` su ogni nodo. Il seguente è il modello per
-`pve1`; sostituire `<NIC_NAT>` e `<NIC_MANAGEMENT>` con i nomi annotati prima:
+Sostituire per intero `/etc/network/interfaces` su ogni nodo: la NIC NAT
+passa da porta di `vmbr0` a interfaccia DHCP autonoma, e `vmbr0` diventa il
+bridge management senza gateway. Il seguente è il modello per `pve1`;
+sostituire `<NIC_NAT>` e `<NIC_MANAGEMENT>` con i nomi annotati prima:
 
 ```text
 auto lo

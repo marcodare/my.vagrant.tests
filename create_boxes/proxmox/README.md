@@ -15,6 +15,8 @@ sul Bosgame e definire la finalizzazione dell'identità Proxmox per ogni clone.
 - utente `vagrant`, chiave pubblica insecure e `sudo` senza password;
 - repository `pve-no-subscription` per Debian 13/Trixie;
 - nessuna Guest Addition e nessuna cartella sincronizzata;
+- `softdog soft_noboot=1`: il watchdog HA (10 s) registra invece di resettare
+  il guest quando VirtualBox lo congela più a lungo;
 - nessun cluster, VM, container, Ceph o storage aggiuntivo;
 - `.box` in `output/`, esclusa da Git.
 

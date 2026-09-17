@@ -35,6 +35,18 @@
 
 - **PVE senza UI:** completare `vagrant reload` e `vagrant provision` dopo
   l'installazione del kernel. `uname -r` deve terminare in `-pve`.
+- **Nodo PVE che si resetta da solo** (SSH chiuso a metà provisioning, guest
+  con `uptime` azzerato, `VBox.log` con `ACPI: Reset initiated by ACPI` e
+  `TM: Aborting catch-up attempt ... lag`): il guest è rimasto congelato oltre
+  i 10 s del watchdog `softdog` armato da `watchdog-mux`. La box locale e
+  `finalize-pve.sh` impostano `soft_noboot=1`; se il reset è avvenuto prima,
+  `/etc/hosts` può essere vuoto e `pve-cluster` fermo: rilanciare
+  `vagrant provision <nodo>` (lo script ripristina hosts e pmxcfs) oppure
+  ricreare il nodo. Il congelamento in sé è del host: misurarlo con
+  `VBoxManage debugvm <vm> statistics --pattern /TM/VirtualSync/CurrentOffset`
+  (in ns; se cresce di secondi al secondo con il guest idle, il tempo virtuale
+  non avanza) e verificare kernel host, versione VirtualBox e assenza di un
+  secondo pacchetto `virtualbox`/`virtualbox-dkms` della distribuzione.
 - **Nested assente:** `grep -w svm /proc/cpuinfo`, `sudo modprobe kvm_amd`,
   `ls -l /dev/kvm`. Verificare SVM firmware e nested virtualization in VirtualBox.
   Non usare emulazione software come prova di prestazioni.

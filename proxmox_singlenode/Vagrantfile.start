@@ -1,0 +1,61 @@
+# frozen_string_literal: true
+# Percorso basic: crea soltanto VM, NIC e disco, senza configurare il guest.
+# Avvio: VAGRANT_VAGRANTFILE=Vagrantfile.start vagrant up
+
+require 'json'
+
+spec = JSON.parse(File.read(File.join(__dir__, 'lab.json')))
+
+Vagrant.configure('2') do |config|
+  config.vbguest.auto_update = false if Vagrant.has_plugin?('vagrant-vbguest')
+  config.vm.box_architecture = 'amd64'
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.boot_timeout = 900
+
+  spec.fetch('nodes').each_with_index do |node, index|
+    subnet = spec.fetch('subnet')
+    mac_id = spec.fetch('mac_id', subnet)
+    netmask = spec.fetch('netmask', '255.255.255.0')
+    address = "192.168.#{subnet}.#{node.fetch('host')}"
+    management_mac = format('080027%02X%02X02', mac_id, index + 1)
+    networks = node.fetch('attach_internal', true) ? spec.fetch('internal_networks') : []
+
+    config.vm.define node.fetch('name') do |vm|
+      vm.vm.box = node.fetch('box', spec.fetch('box'))
+      vm.vm.box_version = node.fetch('box_version', spec.fetch('box_version'))
+
+      # L'IP seleziona il segmento host-only; auto_config=false lascia il
+      # sistema operativo e la rete completamente da configurare in STEPS.md.
+      vm.vm.network 'private_network', ip: address, netmask: netmask,
+        auto_config: false
+
+      networks.each do |network|
+        vm.vm.network 'private_network',
+          ip: "#{network.fetch('prefix')}.#{node.fetch('host')}",
+          auto_config: false,
+          virtualbox__intnet: "#{spec.fetch('id')}-#{network.fetch('name')}"
+      end
+
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = "#{spec.fetch('id')}-#{node.fetch('name')}-start"
+        vb.memory = node.fetch('memory')
+        vb.cpus = node.fetch('cpus')
+        vb.gui = false
+        vb.customize ['modifyvm', :id, '--macaddress2', management_mac]
+        vb.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
+        vb.customize ['modifyvm', :id, '--nicpromisc2', 'allow-all']
+
+        networks.each_with_index do |_network, position|
+          slot = position + 3
+          vb.customize [
+            'modifyvm', :id, "--macaddress#{slot}",
+            format('080027%02X%02X%02X', mac_id, index + 1, slot)
+          ]
+          vb.customize ['modifyvm', :id, "--nicpromisc#{slot}", 'allow-all']
+        end
+      end
+
+      vm.vm.disk :disk, size: '80GB', primary: true
+    end
+  end
+end

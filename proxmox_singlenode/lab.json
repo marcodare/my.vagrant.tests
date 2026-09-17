@@ -1,0 +1,19 @@
+{
+  "id": "proxmox_singlenode",
+  "subnet": 68,
+  "box": "local/proxmox-ve-9.2",
+  "box_version": "0",
+  "internal_networks": [],
+  "nodes": [
+    {
+      "name": "pve1",
+      "role": "pve",
+      "host": 11,
+      "cpus": 6,
+      "memory": 12288
+    }
+  ],
+  "versions": {
+    "pve": "9.2"
+  }
+}

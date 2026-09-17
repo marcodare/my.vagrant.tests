@@ -12,6 +12,7 @@ volta**; tutte le altre restano spente e conservano i propri dischi.
 
 | Cartella | VM | RAM totale | Reti del lab | Obiettivo |
 | --- | --- | --- | --- | --- |
+| [proxmox_singlenode](proxmox_singlenode/README.md) | 1 PVE | 12 GiB | 1 | Nodo standalone, VM e troubleshooting di base |
 | [proxmox_3nodes_simple](proxmox_3nodes_simple/README.md) | 3 PVE | 36 GiB | 1 | Cluster, VM, quorum, migrazione |
 | [proxmox_3nodes_networks](proxmox_3nodes_networks/README.md) | 3 PVE | 36 GiB | 3 | Bridge, VLAN, migrazione su rete dedicata |
 | [proxmox_3nodes_ceph](proxmox_3nodes_ceph/README.md) | 3 PVE | 48 GiB | 2 | Ceph, storage condiviso, HA |
@@ -45,7 +46,7 @@ consumano la RAM già assegnata ai nodi. Le vCPU sono condivise con l'host.
    ```bash
    ./configure.host.sh --check
    ./scripts/validate.sh
-   cd proxmox_3nodes_simple
+   cd proxmox_singlenode
    ./scripts/up.sh
    ```
 
@@ -149,6 +150,8 @@ snapshot e ISO nell'uso dell'SSD.
   percorso assistito sia da quello manuale; PBS 4.2 dal repository
   no-subscription e CloudStack dal ramo 4.23. Gli STEPS PVE conservano anche le
   indicazioni adattabili a installazioni Debian 13 generiche o bare metal.
+- Il lab Proxmox mononodo resta standalone: configura soltanto identità, rete e
+  storage locali, senza creare cluster, VM o container.
 - OPNsense: interfacce, utente Vagrant e poche regole iniziali; il resto è esercizio.
 - VM, NIC, bridge, sincronizzazione oraria e pacchetti base.
 - CloudStack semplice: database, manager, agent, NFS e reti fake public/private.
